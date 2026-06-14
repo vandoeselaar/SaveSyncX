@@ -69,8 +69,7 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
   `E:\TDATA` (downloadable content, patches). Include those in backup and restore.
 
 - [ ] **Progress bar during transfer**
-  Show bytes transferred and a visual progress bar during upload and download
-  instead of just a spinner, especially useful for large saves.
+  Show bytes transferred and a visual progress bar during upload and download.
 
 ---
 
