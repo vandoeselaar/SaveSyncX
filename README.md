@@ -56,11 +56,6 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
 
 ## Ideas / backlog
 
-- [ ] **Restore to a different console**
-  Re-signing currently only works when restoring to the same Xbox the save came
-  from (same HDDKey). Investigate whether cross-console re-signing is feasible for
-  any of the supported titles.
-
 - [ ] **Incremental / differential backup**
   Only upload files that have changed since the last backup run, based on file
   size or a stored checksum, to reduce transfer time for large saves.
@@ -74,8 +69,7 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
   `E:\TDATA` (downloadable content, patches). Include those in backup and restore.
 
 - [ ] **Progress bar during transfer**
-  Show bytes transferred and a visual progress bar during upload and download
-  instead of just a spinner, especially useful for large saves.
+  Show bytes transferred and a visual progress bar during upload and download.
 
 ---
 
