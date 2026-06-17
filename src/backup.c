@@ -70,7 +70,7 @@ static void draw_list(const TitleEntry *titles, int n,
     int total_pages = (n + LIST_PAGE_SIZE - 1) / LIST_PAGE_SIZE;
 
     ui_clear();
-    ui_draw_text(MARGIN_X, MARGIN_Y, "SaveSyncX v1.0 - Backup", UI_COL_TITLE);
+    ui_draw_text(MARGIN_X, MARGIN_Y, "  SaveSyncX  v1.0  --  Backup", UI_COL_TITLE);
     char hdr[64];
     snprintf(hdr, sizeof(hdr), "page %d / %d   (%d titles)",
              page + 1, total_pages, n);
@@ -115,17 +115,14 @@ void do_backup(TitleEntry *titles, int *n,
     int selected = 0;
     char status_msg[80] = "";
     int redraw = 1;
+    static ScrollState scroll = {0};   /* eigen state, niet gedeeld met restore-scherm */
 
     while (1) {
         ui_pump_events();
 
-        if (btn_pressed(DPAD_DOWN)) {
-            selected = (selected + 1) % *n;
-            status_msg[0] = '\0';
-            redraw = 1;
-        }
-        if (btn_pressed(DPAD_UP)) {
-            selected = (selected + *n - 1) % *n;
+        int delta = scroll_update(&scroll, *n);
+        if (delta != 0) {
+            scroll_apply(&selected, delta, *n);
             status_msg[0] = '\0';
             redraw = 1;
         }
@@ -134,11 +131,6 @@ void do_backup(TitleEntry *titles, int *n,
 
         /* ── A: upload save naar server ─────────────────────────── */
         if (btn_pressed(BTN_A)) {
-            char uploading[80];
-            snprintf(uploading, sizeof(uploading),
-                     "Uploading: %s ...", titles[selected].title_name);
-            draw_list(titles, *n, selected, uploading);
-
             char tid_lower[16];
             strncpy(tid_lower, titles[selected].title_id, sizeof(tid_lower) - 1);
             tid_lower[sizeof(tid_lower) - 1] = '\0';
@@ -159,11 +151,37 @@ void do_backup(TitleEntry *titles, int *n,
             snprintf(remote_root, sizeof(remote_root),
                      "%s/%s", parent_root, timestamp);
 
+            /* ── Vooraf scannen voor totaal aantal bestanden/bytes ──
+               Dit geeft ui_progress een geldige noemer (X / TOTAAL)
+               voordat er ook maar één byte geupload is. Zonder deze
+               stap zou files_total pas na de volledige upload bekend
+               zijn, en dus nooit zinnig te tonen tijdens het proces. */
+            static FileEntry scan_entries[1024];
+            int scan_count = fileops_scan(local_root, scan_entries, 1024);
+
+            TransferState progress;
+            memset(&progress, 0, sizeof(progress));
+            progress.active      = 1;
+            progress.cancellable = 1;   /* upload mag onderbroken worden met B */
+
+            /* files_total moet alleen BESTANDEN tellen, niet mappen --
+               fileops_scan levert beide in dezelfde lijst terug. */
+            int file_count = 0;
+            for (int k = 0; k < scan_count; k++)
+                if (!scan_entries[k].is_dir) file_count++;
+            progress.files_total = file_count;
+            progress.bytes_total = fileops_total_size(scan_entries, scan_count);
+            snprintf(progress.status_msg, sizeof(progress.status_msg),
+                     "Uploading %s ...", titles[selected].title_name);
+
             webdav_mkcol(parent_root, creds64, cfg->host, cfg->port);
             int uploaded = upload_dir(local_root, remote_root,
-                                      creds64, cfg->host, cfg->port);
+                                      creds64, cfg->host, cfg->port,
+                                      &progress);
 
-            if (uploaded > 0)
+            if (uploaded < 0)
+                snprintf(status_msg, sizeof(status_msg), "Cancelled");
+            else if (uploaded > 0)
                 snprintf(status_msg, sizeof(status_msg),
                          "OK: %d files -> %s", uploaded, timestamp);
             else

@@ -116,6 +116,62 @@ int btn_pressed(int b)
     return g_btn[b] && !g_btn_prev[b];
 }
 
+/* ── Scroll repeat helper (DPAD up/down met acceleratie + wraparound) ─────── */
+/* ScrollState / prototypes staan in ui.h zodat backup.c en restore.c
+   deze ook kunnen gebruiken (elk met hun eigen losse ScrollState-instantie). */
+
+/* Acceleratie-curve: hoe langer ingedrukt, hoe kleiner het interval.
+   Pas de drempels/snelheden aan naar smaak. */
+static Uint32 scroll_repeat_interval(Uint32 held_ms)
+{
+    if (held_ms > 2000) return 33;   /* ~30/s  na 2s   */
+    if (held_ms > 1000) return 66;   /* ~15/s  na 1s   */
+    return 100;                       /* ~10/s  basis   */
+}
+
+/* Retourneert: -1 = omhoog, +1 = omlaag, 0 = geen scroll deze frame.
+   count = aantal items in de lijst (voor wraparound). */
+int scroll_update(ScrollState *st, int count)
+{
+    Uint32 now = SDL_GetTicks();
+    int delta = 0;
+
+    if (count <= 0) return 0;
+
+    /* DOWN */
+    if (btn_pressed(DPAD_DOWN)) {
+        delta = +1;
+        st->held_since_down = now;
+        st->next_repeat_down = now + 300; /* initiele delay */
+    } else if (g_btn[DPAD_DOWN] && now >= st->next_repeat_down) {
+        delta = +1;
+        Uint32 held = now - st->held_since_down;
+        st->next_repeat_down = now + scroll_repeat_interval(held);
+    }
+
+    /* UP (alleen als DOWN deze frame niks deed, voorkomt dubbele input bij overlap) */
+    if (delta == 0) {
+        if (btn_pressed(DPAD_UP)) {
+            delta = -1;
+            st->held_since_up = now;
+            st->next_repeat_up = now + 300;
+        } else if (g_btn[DPAD_UP] && now >= st->next_repeat_up) {
+            delta = -1;
+            Uint32 held = now - st->held_since_up;
+            st->next_repeat_up = now + scroll_repeat_interval(held);
+        }
+    }
+
+    return delta;
+}
+
+/* Past delta toe op sel met wraparound over [0, count-1] */
+void scroll_apply(int *sel, int delta, int count)
+{
+    if (delta == 0 || count <= 0) return;
+    *sel = (*sel + delta + count) % count;
+}
+
 /* ── Init ────────────────────────────────────────────────────────────────── */
 int ui_init(void)
 {
@@ -183,13 +239,20 @@ static const MenuID MENU_IDS[] = {
 MenuID ui_main_menu(void)
 {
     int sel = 0;
+    static ScrollState scroll = {0};
     while (1) {
         ui_pump_events();
 
-        if (btn_pressed(DPAD_DOWN)) sel = (sel + 1) % MENU_COUNT;
-        if (btn_pressed(DPAD_UP))   sel = (sel + MENU_COUNT - 1) % MENU_COUNT;
+        int delta = scroll_update(&scroll, MENU_COUNT);
+        scroll_apply(&sel, delta, MENU_COUNT);
+
         if (btn_pressed(BTN_A) || btn_pressed(BTN_START))
             return MENU_IDS[sel];
+
+        //if (btn_pressed(DPAD_DOWN)) sel = (sel + 1) % MENU_COUNT;
+        //if (btn_pressed(DPAD_UP))   sel = (sel + MENU_COUNT - 1) % MENU_COUNT;
+        //if (btn_pressed(BTN_A) || btn_pressed(BTN_START))
+        //    return MENU_IDS[sel];
 
         ui_clear();
         ui_draw_text(MARGIN_X, MARGIN_Y, "  SaveSyncX  v1.0", COL_TITLE);
@@ -254,7 +317,7 @@ int ui_confirm(const char *message)
 int ui_progress(const TransferState *st)
 {
     ui_pump_events();
-    if (btn_pressed(BTN_B)) return -1;
+    if (st->cancellable && btn_pressed(BTN_B)) return -1;
 
     ui_clear();
     ui_draw_text(MARGIN_X, MARGIN_Y, "  Transfer in progress...", COL_TITLE);
@@ -298,8 +361,12 @@ int ui_progress(const TransferState *st)
                   st->log[idx], col);
     }
 
-    ui_draw_text(MARGIN_X, SCREEN_H - MARGIN_Y - CHAR_H,
-              "B = Cancel transfer", COL_DIM);
+    if (st->cancellable)
+        ui_draw_text(MARGIN_X, SCREEN_H - MARGIN_Y - CHAR_H,
+                  "B = Cancel transfer", COL_DIM);
+    else
+        ui_draw_text(MARGIN_X, SCREEN_H - MARGIN_Y - CHAR_H,
+                  "Please wait...", COL_DIM);
     ui_flip();
     return 0;
 }

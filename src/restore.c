@@ -73,9 +73,53 @@ static void draw_pick_list(const char *title,
     ui_flip();
 }
 
+/* ── Tel recursief het aantal bestanden in een remote map ────────── */
+/*
+ * Doet alleen PROPFIND (geen GET/CreateDirectory) om vooraf te weten
+ * hoeveel bestanden er totaal gedownload gaan worden, zodat ui_progress
+ * een geldig totaal (X / Y) kan tonen voordat de echte download begint.
+ *
+ * WebDAV PROPFIND met Depth:1 (zoals webdav_list_directory_ex gebruikt)
+ * geeft geen bestandsgrootte terug in deze implementatie, dus we tellen
+ * alleen bestanden, geen bytes -- ui_progress toont in dat geval gewoon
+ * "Bytes: 0 / 0", wat geen probleem is omdat de bytes-balk dan simpelweg
+ * niet gebruikt wordt; de bestand-teller (X/Y) blijft wel exact.
+ */
+static int count_remote_files(const char *remote_dir,
+                              const char *creds64, const char *host, int port)
+{
+    typedef char PathBuf[MAX_PATH_LEN];
+    PathBuf *items  = (PathBuf *)malloc(128 * sizeof(PathBuf));
+    int     *is_dir = (int *)malloc(128 * sizeof(int));
+    if (!items || !is_dir) {
+        free(items); free(is_dir);
+        return 0;
+    }
+
+    int n = webdav_list_directory_ex(remote_dir, items, is_dir, 128,
+                                     creds64, host, port);
+    if (n < 0) { free(items); free(is_dir); return 0; }
+
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (is_dir[i]) {
+            char child[MAX_PATH_LEN];
+            snprintf(child, sizeof(child), "%s/%s", remote_dir, items[i]);
+            total += count_remote_files(child, creds64, host, port);
+        } else {
+            total++;
+        }
+    }
+
+    free(items);
+    free(is_dir);
+    return total;
+}
+
 /* ── Recursief een map downloaden ───────────────────────────────── */
 static int webdav_download_dir(const char *remote_dir, const char *local_dir,
-                               const char *creds64, const char *host, int port)
+                               const char *creds64, const char *host, int port,
+                               TransferState *progress)
 {
     int success_count = 0;
 
@@ -93,7 +137,7 @@ static int webdav_download_dir(const char *remote_dir, const char *local_dir,
 
     char status_msg[MAX_PATH_LEN + 64];
     snprintf(status_msg, sizeof(status_msg), "Listing: %s", remote_dir);
-    LOG_MSG("Restore", status_msg);
+    log_print("[UI] Restore: %s\n", status_msg);
 
     /* Gebruik _ex zodat we weten welke items mappen zijn zonder
      * een tweede PROPFIND per item te doen. Die tweede PROPFIND
@@ -103,13 +147,16 @@ static int webdav_download_dir(const char *remote_dir, const char *local_dir,
                                      creds64, host, port);
 
     snprintf(status_msg, sizeof(status_msg), "Found %d items in %s", n, remote_dir);
-    LOG_MSG("Restore", status_msg);
+    log_print("[UI] Restore: %s\n", status_msg);
 
     if (n < 0) {
         snprintf(status_msg, sizeof(status_msg),
                  "ERROR: PROPFIND failed voor %s", remote_dir);
-        LOG_MSG("Restore", status_msg);
-        SDL_Delay(2000);
+        log_print("[UI] Restore: %s\n", status_msg);
+        if (!progress) {
+            ui_message_nowait("Restore", status_msg);
+            SDL_Delay(2000);
+        }
         free(items); free(is_dir);
         return 0;
     }
@@ -124,12 +171,18 @@ static int webdav_download_dir(const char *remote_dir, const char *local_dir,
 
         if (is_dir[i]) {
             snprintf(status_msg, sizeof(status_msg), "Dir: %s", items[i]);
-            LOG_MSG("Restore", status_msg);
+            log_print("[UI] Restore: %s\n", status_msg);
             success_count += webdav_download_dir(remote_child, local_child,
-                                                 creds64, host, port);
+                                                 creds64, host, port, progress);
         } else {
             snprintf(status_msg, sizeof(status_msg), "GET %s", items[i]);
-            LOG_MSG("Restore", status_msg);
+            log_print("[UI] Restore: %s\n", status_msg);
+
+            if (progress) {
+                strncpy(progress->current_file, items[i],
+                         sizeof(progress->current_file) - 1);
+                progress->current_file[sizeof(progress->current_file) - 1] = '\0';
+            }
 
             int r = webdav_get_file(remote_child, local_child, creds64, host, port);
             if (r == 0) {
@@ -138,8 +191,29 @@ static int webdav_download_dir(const char *remote_dir, const char *local_dir,
             } else {
                 snprintf(status_msg, sizeof(status_msg), "FAILED (GET=%d) %s", r, items[i]);
             }
-            LOG_MSG("Restore", status_msg);
-            SDL_Delay(300);
+            log_print("[UI] Restore: %s\n", status_msg);
+
+            if (progress) {
+                progress->files_done++;
+                snprintf(progress->log[progress->log_next], TRANSFER_LOG_WIDTH,
+                         "%s %s", (r == 0) ? "OK " : "FAIL", items[i]);
+                progress->log_next = (progress->log_next + 1) % TRANSFER_LOG_LINES;
+
+                if (r != 0) {
+                    snprintf(progress->status_msg, sizeof(progress->status_msg),
+                             "Failed: %s", items[i]);
+                } else {
+                    progress->status_msg[0] = '\0';
+                }
+
+                /* Geen cancel-check hier: download mag altijd afmaken
+                   (in tegenstelling tot upload_dir). We roepen ui_progress
+                   wel aan om het scherm te verversen en input te pollen,
+                   maar negeren bewust de returnwaarde. */
+                ui_progress(progress);
+            } else {
+                SDL_Delay(300);
+            }
         }
     }
 
@@ -194,14 +268,15 @@ void do_restore(const char *creds64, const AppConfig *cfg)
 
     int title_sel = 0;
     int redraw    = 1;
+    static ScrollState scroll_titles = {0};   /* eigen state, los van backup_sel-scherm */
     while (1) {
         ui_pump_events();
-        if (btn_pressed(DPAD_DOWN)) { title_sel = (title_sel + 1) % title_count; redraw = 1; }
-        if (btn_pressed(DPAD_UP))   { title_sel = (title_sel + title_count - 1) % title_count; redraw = 1; }
+        int delta = scroll_update(&scroll_titles, title_count);
+        if (delta != 0) { scroll_apply(&title_sel, delta, title_count); redraw = 1; }
         if (btn_pressed(BTN_B))     return;
         if (btn_pressed(BTN_A))     break;
         if (redraw) {
-            draw_pick_list("SaveSyncX v1.0 - Restore",
+            draw_pick_list("  SaveSyncX  v1.0  --  Restore",
                            title_display, title_count, title_sel,
                            "up/down=scroll  A=select  B=back  Y=delete");
             redraw = 0;
@@ -244,10 +319,11 @@ void do_restore(const char *creds64, const AppConfig *cfg)
 
     int backup_sel = 0;
     redraw = 1;
+    static ScrollState scroll_backups = {0};   /* eigen state, los van title_sel-scherm */
     while (1) {
         ui_pump_events();
-        if (btn_pressed(DPAD_DOWN)) { backup_sel = (backup_sel + 1) % backup_count; redraw = 1; }
-        if (btn_pressed(DPAD_UP))   { backup_sel = (backup_sel + backup_count - 1) % backup_count; redraw = 1; }
+        int delta = scroll_update(&scroll_backups, backup_count);
+        if (delta != 0) { scroll_apply(&backup_sel, delta, backup_count); redraw = 1; }
         if (btn_pressed(BTN_B))     return;
         if (btn_pressed(BTN_A))     break;
         if (btn_pressed(BTN_Y)) {
@@ -390,9 +466,31 @@ void do_restore(const char *creds64, const AppConfig *cfg)
     log_print("[Stap 4] Download gestart\n");
     log_print("[Stap 4] Remote pad : %s\n", remote_backup_path);
     log_print("[Stap 4] Lokaal pad : %s\n", local_title_path);
-    ui_message_nowait("Restore", "Downloading, please wait...");
+
+    /* ── Vooraf tellen hoeveel bestanden er staan ──
+       Een extra recursieve PROPFIND-pass, geen downloads. Hierdoor kan
+       ui_progress een geldig totaal (X / Y) tonen vanaf het allereerste
+       bestand, in plaats van pas een schatting te hebben na afloop. */
+    ui_message_nowait("Restore", "Counting files...");
+    int total_files = count_remote_files(remote_backup_path, creds64,
+                                         cfg->host, cfg->port);
+    log_print("[Stap 4] Telpas: %d bestanden gevonden\n", total_files);
+
+    TransferState progress;
+    memset(&progress, 0, sizeof(progress));
+    progress.active      = 1;
+    progress.cancellable = 0;   /* download maakt altijd af, B wordt genegeerd
+                                    en ui_progress toont geen cancel-hint */
+    progress.files_total = total_files;
+    /* bytes_total blijft 0: PROPFIND Depth:1 geeft hier geen
+       bestandsgrootte terug, dus de bytes-balk in ui_progress toont
+       gewoon "0 / 0" -- de bestand-teller (X/Y) is wel exact. */
+    snprintf(progress.status_msg, sizeof(progress.status_msg),
+             "Downloading %s ...", chosen_title);
+
     int restored = webdav_download_dir(remote_backup_path, local_title_path,
-                                       creds64, cfg->host, cfg->port);
+                                       creds64, cfg->host, cfg->port,
+                                       &progress);
 
     log_print("[Stap 4] Download klaar: %d bestanden ontvangen\n", restored);
 

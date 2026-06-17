@@ -29,6 +29,8 @@ typedef enum {
 /* ── Progress state (shared between transfer thread and UI) ─────────────── */
 typedef struct {
     volatile int    active;          /* 1 while transfer runs              */
+    volatile int    cancellable;     /* 1 = B-knop annuleert, 0 = B genegeerd
+                                         (toont ook geen "B = Cancel" hint) */
     volatile size_t bytes_done;
     volatile size_t bytes_total;
     volatile int    files_done;
@@ -40,6 +42,25 @@ typedef struct {
     char            log[TRANSFER_LOG_LINES][TRANSFER_LOG_WIDTH];
     volatile int    log_next;        /* index waar de volgende regel komt  */
 } TransferState;
+
+/* Per-lijst scroll/repeat state. Elke aanroeplocatie (do_backup, do_restore,
+   ui_main_menu, ...) houdt zijn EIGEN static ScrollState bij -- nooit delen
+   tussen verschillende lijsten, anders lekt de repeat-timing van de ene
+   lijst naar de andere zodra je tussen schermen wisselt. */
+typedef struct {
+    Uint32 next_repeat_up;
+    Uint32 next_repeat_down;
+    Uint32 held_since_up;
+    Uint32 held_since_down;
+} ScrollState;
+/* Verwerkt DPAD up/down met initiele delay (300ms) + acceleratie.
+   Retourneert -1 (omhoog), +1 (omlaag) of 0 (geen scroll deze frame).
+   count = aantal items in de lijst; bij count <= 0 altijd 0. */
+int scroll_update(ScrollState *st, int count);
+ 
+/* Past delta toe op *sel met wraparound binnen [0, count-1]. No-op bij
+   delta == 0 of count <= 0. */
+void scroll_apply(int *sel, int delta, int count);
 
 /* ── Initialise SDL + font rendering ────────────────────────────────────── */
 int  ui_init(void);

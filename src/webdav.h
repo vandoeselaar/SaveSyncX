@@ -2,6 +2,7 @@
 #define WEBDAV_H
 
 #include "config.h"
+#include "../lib/ui.h"   /* voor TransferState (upload_dir progress) */
 #include <stddef.h>
 
 /*
@@ -79,9 +80,19 @@ int webdav_list_directory_ex(const char *remote_path,
 
 /*
  * upload_dir  –  Recursively upload a local directory tree via PUT + MKCOL.
- * Returns number of files successfully uploaded.
+ *
+ * progress mag NULL zijn (geen UI-feedback, gedraagt zich als voorheen).
+ * Als progress niet NULL is, moet de CALLER vooraf al hebben ingevuld:
+ *   progress->files_total, progress->bytes_total  (bijv. via fileops_scan)
+ *   progress->files_done = 0, progress->bytes_done = 0, progress->error = 0
+ * upload_dir roept dan na elk bestand ui_progress() aan, wat ook de
+ * B-knop (annuleren) afhandelt.
+ *
+ * Returns number of files successfully uploaded, or -1 if the user
+ * cancelled the transfer via ui_progress.
  */
 int upload_dir(const char *local_dir, const char *remote_dir,
-               const char *creds64, const char *host, int port);
+               const char *creds64, const char *host, int port,
+               TransferState *progress);
 
 #endif /* WEBDAV_H */

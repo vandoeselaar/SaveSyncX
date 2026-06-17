@@ -35,6 +35,17 @@ typedef struct {
     char remote_base[MAX_PATH_LEN];
 } AppConfig;
 
+/* Volledig pad (map + bestandsnaam) van de draaiende XBE, bijv.
+   "E:\Apps\SaveSyncX\default.xbe". Voor gebruik met XLaunchXBE.
+   Geeft 1 terug bij succes, 0 als het pad niet bepaald kon worden. */
+int config_get_self_xbe_path(char *out, int out_sz);
+ 
+/* nxNetInit relaunch-teller (zie config.c voor uitleg).
+   Persisteert over XLaunchXBE-relaunches heen via een bestand op E:\. */
+int  config_net_retry_count_load(void);
+int  config_net_retry_count_save(int count);
+void config_net_retry_count_clear(void);
+ 
 /* Bepaal de map van de draaiende XBE. Geeft 1 terug bij succes. */
 int  config_get_app_dir(char *out, int out_sz);
 

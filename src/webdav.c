@@ -8,10 +8,12 @@
 #include "webdav.h"
 #include "config.h"
 #include "../lib/util.h"
+#include "../lib/ui.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <windows.h>
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -582,8 +584,19 @@ int webdav_list_directory_ex(const char *remote_path,
 }
 
 /* ── upload_dir ──────────────────────────────────────────────────── */
+/*
+ * progress mag NULL zijn (geen UI-feedback, oud gedrag).
+ * Als progress niet NULL is, verwacht deze functie dat de caller
+ * VOORAF al files_total / bytes_total heeft ingevuld (bijv. via
+ * fileops_scan), en files_done / bytes_done op 0 heeft gezet.
+ *
+ * Retourneert het aantal succesvol geuploade bestanden, OF -1 als de
+ * gebruiker via ui_progress (B-knop) heeft geannuleerd -- in dat geval
+ * is progress->error gezet en stopt de recursie meteen op elk niveau.
+ */
 int upload_dir(const char *local_dir, const char *remote_dir,
-               const char *creds64, const char *host, int port)
+               const char *creds64, const char *host, int port,
+               TransferState *progress)
 {
     int uploaded = 0;
 
@@ -600,17 +613,64 @@ int upload_dir(const char *local_dir, const char *remote_dir,
         if (strcmp(fd.cFileName, ".") == 0 ||
             strcmp(fd.cFileName, "..") == 0) continue;
 
+        /* Als een eerdere iteratie (op dit niveau of dieper) al
+           geannuleerd is, breken we meteen uit -- geen nieuwe
+           bestanden meer aanraken. */
+        if (progress && progress->error) break;
+
         char local_child[MAX_PATH_LEN];
         char remote_child[MAX_PATH_LEN];
         snprintf(local_child,  sizeof(local_child),  "%s\\%s", local_dir,  fd.cFileName);
         snprintf(remote_child, sizeof(remote_child), "%s/%s",  remote_dir, fd.cFileName);
 
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            uploaded += upload_dir(local_child, remote_child, creds64, host, port);
+            int sub = upload_dir(local_child, remote_child, creds64, host, port, progress);
+            if (sub < 0) { uploaded = -1; break; }
+            uploaded += sub;
         } else {
+            if (progress) {
+                strncpy(progress->current_file, fd.cFileName,
+                         sizeof(progress->current_file) - 1);
+                progress->current_file[sizeof(progress->current_file) - 1] = '\0';
+            }
+
             int s = webdav_put_file(local_child, remote_child, creds64, host, port);
             if (s == 200 || s == 201 || s == 204)
                 uploaded++;
+
+            if (progress) {
+                progress->files_done++;
+                /* file_size hadden we al uit GetFileSize in webdav_put_file,
+                   maar die geeft 'm niet terug -- we benaderen bytes_done
+                   hier via de lokale bestandsgrootte (zelfde berekening als
+                   fileops.c:scan_recursive) zodat de bar ook beweegt als
+                   losse PUT's falen (anders blijft hij steken).
+                   Let op: de shift moet op uint64_t gebeuren, niet size_t --
+                   size_t is op dit (32-bit) platform te klein, wat een
+                   "shift count >= width of type" warning gaf. */
+                uint64_t fsize = ((uint64_t)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+                progress->bytes_done += (size_t)fsize;
+
+                snprintf(progress->log[progress->log_next], TRANSFER_LOG_WIDTH,
+                         "%s %s", (s == 200 || s == 201 || s == 204) ? "OK " : "FAIL",
+                         fd.cFileName);
+                progress->log_next = (progress->log_next + 1) % TRANSFER_LOG_LINES;
+
+                if (s != 200 && s != 201 && s != 204) {
+                    snprintf(progress->status_msg, sizeof(progress->status_msg),
+                             "Failed: %s (HTTP %d)", fd.cFileName, s);
+                } else {
+                    progress->status_msg[0] = '\0';
+                }
+
+                if (ui_progress(progress) < 0) {
+                    progress->error = 1;
+                    snprintf(progress->status_msg, sizeof(progress->status_msg),
+                             "Cancelled by user");
+                    uploaded = -1;
+                    break;
+                }
+            }
         }
     } while (FindNextFile(h, &fd));
 

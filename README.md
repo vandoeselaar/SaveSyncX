@@ -17,6 +17,27 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
 
 ---
 
+## Changelog
+
+### v1.1
+
+- **Progress feedback during backup and restore** — uploads and downloads
+  now show a live progress screen (files transferred, byte count, current
+  file name, and a scrolling log) instead of leaving the screen static,
+  which could look like the console had locked up during larger transfers.
+  Backup uploads can be cancelled mid-transfer with **B**; restores always
+  run to completion once started.
+- **Smoother D-pad list scrolling** — holding Up/Down now repeats with an
+  initial delay followed by acceleration (speeding up the longer the
+  button is held), instead of requiring a tap per item. Applies to the
+  main menu, backup list, and restore list.
+- **More resilient network startup** — if `nxNetInit` fails because a
+  previous dashboard left the network stack in a bad state, SaveSyncX now
+  automatically relaunches itself (up to 3 attempts) to get a clean
+  startup, instead of failing immediately.
+
+---
+
 ## Requirements
 
 - Original Xbox (any hardware revision) with a modchip or softmod
@@ -38,9 +59,11 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
 
 - [ ] **TLS for direct WebDAV communication**
   The Xbox currently cannot make HTTPS connections, requiring the `webdav-proxy`
-  workaround for cloud providers. Adding TLS (via mbedTLS, which ships with nxdk)
-  would allow SaveSyncX to connect directly to HTTPS WebDAV servers without a
-  proxy on the local network.
+  workaround for cloud providers. Adding TLS (via BearSSL over nxdk's BSD
+  sockets) would allow SaveSyncX to connect directly to HTTPS WebDAV servers
+  without a proxy on the local network. Handshake and GET requests already
+  work in testing; remaining work is finishing response reading and wiring
+  it into the main upload/download paths.
 
 - [ ] **Add name or tag to a backup snapshot**
   Right now backups are identified only by their timestamp
@@ -67,9 +90,6 @@ Xbox homebrew application that backs up and restores game saves via WebDAV. Buil
 - [ ] **TDATA support**
   Currently only `E:\UDATA` is scanned. Some titles store additional data in
   `E:\TDATA` (downloadable content, patches). Include those in backup and restore.
-
-- [ ] **Progress bar during transfer**
-  Show bytes transferred and a visual progress bar during upload and download.
 
 ---
 

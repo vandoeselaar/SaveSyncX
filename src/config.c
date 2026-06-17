@@ -87,6 +87,40 @@ int config_get_app_dir(char *out, int out_sz)
     return get_xbe_dir(out, out_sz);
 }
 
+/*
+ * Bepaal het VOLLEDIGE pad (map + bestandsnaam) van de draaiende XBE
+ * als DOS-pad, bijv. "E:\Apps\SaveSyncX\default.xbe".
+ *
+ * Dit is wat XLaunchXBE verwacht: de nxdk-implementatie roept zelf
+ * XConvertDOSFilenameToXBOX aan op het pad dat je meegeeft, en zet
+ * de ';'-padscheider ook zelf (XLaunchXBEEx in lib/hal/xbox.c) — dus
+ * een kernel-pad of voorafgaande ';'-vervanging door de caller is
+ * niet nodig en zou averechts werken.
+ *
+ * Geeft 1 terug bij succes, 0 als XeImageFileName niet beschikbaar is
+ * of het kernel-pad niet naar een DOS-pad omgezet kon worden.
+ */
+static int get_xbe_filepath(char *out, int out_sz)
+{
+    extern ANSI_STRING XeImageFileName[1];
+    if (!XeImageFileName[0].Buffer || XeImageFileName[0].Length == 0)
+        return 0;
+
+    char kpath[MAX_PATH_LEN];
+    int klen = XeImageFileName[0].Length;
+    if (klen >= (int)sizeof(kpath)) klen = (int)sizeof(kpath) - 1;
+    memcpy(kpath, XeImageFileName[0].Buffer, klen);
+    kpath[klen] = '\0';
+
+    return kernel_to_dos_path(kpath, out, out_sz);
+}
+
+/* Publieke wrapper — gebruikt door main.c voor de net-init relaunch workaround */
+int config_get_self_xbe_path(char *out, int out_sz)
+{
+    return get_xbe_filepath(out, out_sz);
+}
+
 static void get_ini_path(char *out, int out_sz)
 {
     char dir[MAX_PATH_LEN];
@@ -225,4 +259,53 @@ int config_is_valid(const AppConfig *cfg)
     if (cfg->remote_base[0] == '\0') return 0;
     /* username/password mogen leeg zijn (server zonder auth) */
     return 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* nxNetInit relaunch-teller                                            */
+/*                                                                       */
+/* Sommige dashboards (bijv. LithiumX) laten de lwIP-stack in een       */
+/* staat achter waarin een verse nxNetInit kan falen, omdat tcpip_init  */
+/* al gedraaid heeft en er geen publieke API is om die thread af te     */
+/* breken. Workaround: relaunch onze eigen XBE voor een schone memory   */
+/* space. Om een oneindige relaunch-loop te voorkomen (bijv. als er     */
+/* gewoon geen netwerkkabel in zit) houden we een pogingenteller bij    */
+/* in een klein bestand op E:\ -- dat overleeft de relaunch, een        */
+/* static counter in RAM niet.                                          */
+/* ------------------------------------------------------------------ */
+
+#define NET_RETRY_FILE "E:\\savesyncx_netretry.tmp"
+
+/*
+ * Leest de huidige pogingenteller. Geeft 0 terug als het bestand niet
+ * bestaat (eerste poging) of niet leesbaar is.
+ */
+int config_net_retry_count_load(void)
+{
+    FILE *f = fopen(NET_RETRY_FILE, "r");
+    if (!f) return 0;
+
+    int count = 0;
+    if (fscanf(f, "%d", &count) != 1) count = 0;
+    fclose(f);
+    return count;
+}
+
+/* Schrijft de pogingenteller weg. Geeft 1 terug bij succes, 0 bij falen. */
+int config_net_retry_count_save(int count)
+{
+    FILE *f = fopen(NET_RETRY_FILE, "w");
+    if (!f) return 0;
+    fprintf(f, "%d\n", count);
+    fclose(f);
+    return 1;
+}
+
+/*
+ * Verwijdert de tellerbestand. Wordt aangeroepen zodra nxNetInit
+ * succesvol is, zodat de volgende KOUDE start weer bij 0 begint.
+ */
+void config_net_retry_count_clear(void)
+{
+    remove(NET_RETRY_FILE);
 }

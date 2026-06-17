@@ -3,6 +3,7 @@
 #include <string.h>
 #include <hal/video.h>
 #include <hal/debug.h>
+#include <hal/xbox.h>
 #include <windows.h>
 #include <nxdk/net.h>
 #include <lwip/sockets.h>
@@ -23,6 +24,11 @@
 
 /* ── Savegame selectiescherm ──────────────────────────────────── */
 #define CHAR_W    8
+
+/* Max. aantal keer dat we onze eigen XBE relaunchen als nxNetInit
+   faalt (workaround voor een vervuilde lwIP-staat na dashboards als
+   LithiumX). Voorkomt een oneindige loop bij permanente netwerkfouten. */
+#define NET_INIT_MAX_RETRIES 3
 
 
 
@@ -107,13 +113,49 @@ void __cdecl main(void)
         return;
     }
 
-    /* Netwerk */
+    /* ── Netwerk ──────────────────────────────────────────────────
+     * Sommige dashboards (bijv. LithiumX) laten lwIP in een vervuilde
+     * staat achter, waardoor een verse nxNetInit hier kan falen.
+     * Workaround: relaunch onze eigen XBE voor een schone memory space.
+     * Een tellerbestand op E:\ voorkomt een oneindige relaunch-loop
+     * (bijv. als er gewoon geen netwerkkabel in zit). */
     ui_message_nowait("SaveSyncX", "Initialize network - Waiting for DHCP...");
     if (nxNetInit(NULL) != 0) {
-        ui_message("Error", "nxNetInit failed");
+        int attempts = config_net_retry_count_load();
+
+        if (attempts < NET_INIT_MAX_RETRIES) {
+            char self_path[MAX_PATH_LEN];
+            if (config_get_self_xbe_path(self_path, sizeof(self_path))) {
+                config_net_retry_count_save(attempts + 1);
+                log_print("nxNetInit failed (attempt %d/%d) - relaunching %s\n",
+                          attempts + 1, NET_INIT_MAX_RETRIES, self_path);
+
+                char msg[96];
+                snprintf(msg, sizeof(msg),
+                         "Network init failed, retrying (%d/%d)...",
+                         attempts + 1, NET_INIT_MAX_RETRIES);
+                ui_message_nowait("SaveSyncX", msg);
+                SDL_Delay(500);
+
+                ui_shutdown();
+                XLaunchXBE(self_path);
+                /* XLaunchXBE keert normaal niet terug; onderstaande
+                   regel is alleen een vangnet als het toch misgaat. */
+                return;
+            }
+            log_print("nxNetInit failed and self_path kon niet bepaald worden - geen relaunch mogelijk\n");
+        } else {
+            log_print("nxNetInit failed na %d pogingen - geef op\n", attempts);
+        }
+
+        config_net_retry_count_clear();
+        ui_message("Error", "nxNetInit failed (network stack busy?)");
         ui_shutdown();
         return;
     }
+    /* Netwerk succesvol geinitialiseerd: teller resetten zodat de
+       volgende KOUDE start weer bij 0 begint. */
+    config_net_retry_count_clear();
     SDL_Delay(2000);
 
     /* Configuratie laden */
