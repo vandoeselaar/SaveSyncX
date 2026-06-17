@@ -1,0 +1,55 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+/* ── WebDAV Server Settings ─────────────────────────────────────────────── */
+/* Edit these values, or store them in E:\savesync.ini on the Xbox           */
+
+#define WEBDAV_DEFAULT_HOST     "192.168.1.1"
+#define WEBDAV_DEFAULT_PORT     80
+#define WEBDAV_DEFAULT_BASE_PATH "/SaveSync"
+
+/* E:\savesyncx.ini keys */
+#define CFG_KEY_HOST     "host"
+#define CFG_KEY_PORT     "port"
+#define CFG_KEY_USER     "username"
+#define CFG_KEY_PASS     "password"
+#define CFG_KEY_PATH     "remote_path"
+#define CFG_INI_PATH     "E:\\savesyncx.ini"
+
+/* ── Xbox Paths ──────────────────────────────────────────────────────────── */
+#define XBOX_TDATA_PATH  "E:\\TDATA"
+#define XBOX_UDATA_PATH  "E:\\UDATA"
+
+/* ── Limits ──────────────────────────────────────────────────────────────── */
+#define MAX_PATH_LEN     256
+#define MAX_CRED_LEN     128
+#define MAX_FILES        2048
+#define TRANSFER_BUF_SZ  (64 * 1024)   /* 64 KB read/write buffer */
+
+/* ── Config struct ───────────────────────────────────────────────────────── */
+typedef struct {
+    char host[MAX_CRED_LEN];
+    int  port;
+    char username[MAX_CRED_LEN];
+    char password[MAX_CRED_LEN];
+    char remote_base[MAX_PATH_LEN];
+} AppConfig;
+
+/* Bepaal de map van de draaiende XBE. Geeft 1 terug bij succes. */
+int  config_get_app_dir(char *out, int out_sz);
+
+/* Load config from INI file.
+   Als path NULL is, wordt het pad automatisch bepaald via config_get_app_dir.
+   Returns 0 on success. */
+int  config_load(AppConfig *cfg, const char *path);
+
+/* Save config back to INI file. Returns 0 on success. */
+int  config_save(const AppConfig *cfg);
+
+/* Fill *cfg with compiled-in defaults. */
+void config_defaults(AppConfig *cfg);
+
+/* Returns 1 if cfg has the minimum required fields filled in, 0 otherwise. */
+int config_is_valid(const AppConfig *cfg);
+
+#endif /* CONFIG_H */

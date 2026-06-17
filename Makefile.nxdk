@@ -1,0 +1,24 @@
+XBE_TITLE = SaveSyncX
+GEN_XISO  = savesyncx.iso
+
+NXDK_DIR ?= /nxdk
+NXDK_NET  = y
+NXDK_SDL  = y
+
+SRCS = $(CURDIR)/src/main.c \
+       $(CURDIR)/src/config.c \
+       $(CURDIR)/src/webdav.c \
+       $(CURDIR)/src/backup.c \
+       $(CURDIR)/src/restore.c \
+       $(CURDIR)/src/resign.c \
+       $(CURDIR)/src/fileops.c \
+       $(CURDIR)/src/titlescan.c \
+       $(CURDIR)/lib/ui.c \
+       $(CURDIR)/lib/util.c
+
+CFLAGS += -I$(CURDIR)/src \
+          -I$(CURDIR)/lib
+
+STACK_SIZE = 65536
+
+include $(NXDK_DIR)/Makefile
