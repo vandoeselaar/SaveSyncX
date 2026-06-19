@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updated": "2025-06-19",
+  "saves": [
+    {
+      "title_id": "4d530004",
+      "game_name": "Halo: Combat Evolved",
+      "saves": [
+        {
+          "id": "default",
+          "label": "Campaign - All missions unlocked",
+          "file": "savegames/4d530004/default.zip",
+          "size_bytes": 24576,
+          "author": "vandoeselaar",
+          "notes": "Legendary difficulty, 100% complete"
+        }
+      ]
+    },
+    {
+      "title_id": "4d530064",
+      "game_name": "Fable: The Lost Chapters",
+      "saves": [
+        {
+          "id": "good_ending",
+          "label": "Good ending - max renown",
+          "file": "savegames/4d530064/good_ending.zip",
+          "size_bytes": 18432,
+          "author": "vandoeselaar",
+          "notes": null
+        },
+        {
+          "id": "evil_ending",
+          "label": "Evil ending - max strength",
+          "file": "savegames/4d530064/evil_ending.zip",
+          "size_bytes": 19200,
+          "author": "vandoeselaar",
+          "notes": "All spells unlocked"
+        }
+      ]
+    }
+  ]
+}
