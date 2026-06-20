@@ -15,6 +15,20 @@
           "notes": "All events unlocked, 100% complete"
         }
       ]
+    },
+    {
+      "title_id": "4541000d",
+      "game_name": "007 James Bond Agent Under Fire",
+      "saves": [
+        {
+          "id": "ScrewAR_100pct",
+          "label": "100% Complete",
+          "file": "savegames/4541000d/007-James-Bond-Agent-Under-Fire_100pct.zip",
+          "size_bytes": 8176,
+          "author": "ScrewAR",
+          "notes": "All events unlocked, 100% complete"
+        }
+      ]
     }
   ]
 }
