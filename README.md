@@ -7,7 +7,7 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 ## Features
 
 - Browse all save games found in `E:\UDATA` directly on the console
-- Back up saves to any WebDAV server over your local network
+- Back up saves to any WebDAV server over your local network or directly to cloud providers over HTTPS
 - Restore saves from the server back to the console
 - Automatic re-signing of EEPROM-locked (non-roamable) saves after restore and after downloading community saves
 - Delete local saves or remote backup snapshots from the UI
@@ -19,6 +19,12 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 ---
 
 ## Changelog
+
+### v1.3
+
+- **HTTPS WebDAV (backup/restore)** — the Xbox can now connect directly to HTTPS WebDAV servers for backup and restore, using the same BearSSL TLS stack introduced in v1.2 for GitHub downloads. Cloud providers such as Koofr, Nextcloud, and Box work without any proxy or PC in the middle. Set `use_tls=1` in `savesyncx.ini` to enable.
+- **Proxy no longer required** — the `webdav-proxy` workaround is now obsolete for providers that support standard HTTPS WebDAV. It remains included for setups that specifically need it (e.g. plain-HTTP self-hosted servers fronted by an HTTPS reverse proxy).
+- **Hostname resolution for WebDAV** — the WebDAV client now uses `getaddrinfo` instead of `inet_addr`, so hostnames like `app.koofr.net` resolve correctly. IP addresses continue to work as before.
 
 ### v1.2
 
@@ -50,7 +56,7 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 - Original Xbox (any hardware revision) with a modchip or softmod
 - Network connection (DHCP)
-- A WebDAV server — either self-hosted or a cloud provider via the included proxy (required for backup/restore; not needed for Download Saves)
+- A WebDAV server — either self-hosted on your local network, or a cloud provider over HTTPS (no proxy needed)
 
 ---
 
@@ -64,11 +70,6 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
   `savesyncx.ini` without needing a PC.
 
 ## Planned
-
-- [ ] **TLS for WebDAV (backup/restore)**
-  BearSSL is now used for GitHub downloads. Wiring the same TLS stack into
-  the main WebDAV upload/download paths would allow SaveSyncX to connect
-  directly to HTTPS WebDAV servers without the `webdav-proxy` workaround.
 
 - [ ] **Add name or tag to a backup snapshot**
   Right now backups are identified only by their timestamp
@@ -136,9 +137,21 @@ port=80
 username=youruser
 password=yourpass
 remote_path=/SaveSync
+use_tls=0
+tls_verify=1
 ```
 
-All fields except `username` and `password` are required. Leave credentials blank if your WebDAV server does not require authentication.
+All fields except `username`, `password`, and `use_tls` are required. Leave credentials blank if your WebDAV server does not require authentication.
+
+| Key | Description |
+|-----|-------------|
+| `host` | IP address or hostname of your WebDAV server |
+| `port` | TCP port (typically `80` for HTTP, `443` for HTTPS) |
+| `username` | WebDAV username (leave blank if not required) |
+| `password` | WebDAV password (leave blank if not required) |
+| `remote_path` | Base path on the server where backups are stored |
+| `use_tls` | `1` = connect over HTTPS, `0` = plain HTTP (default) |
+| `tls_verify` | `1` = verify server certificate (default), `0` = accept any certificate (use for self-signed certs) |
 
 The Download Saves feature connects directly to GitHub over HTTPS and does not use these settings.
 
@@ -146,9 +159,9 @@ The Download Saves feature connects directly to GitHub over HTTPS and does not u
 
 ## WebDAV server options
 
-SaveSyncX needs a WebDAV server to store backups. There are two approaches: self-hosted on your local network, or a cloud provider via the included HTTPS proxy.
+SaveSyncX needs a WebDAV server to store backups. There are two approaches: self-hosted on your local network, or a cloud provider over HTTPS.
 
-### Option A — Self-hosted with Docker (recommended)
+### Option A — Self-hosted with Docker (recommended for local networks)
 
 The easiest way to run a local WebDAV server is with [WsgiDAV](https://wsgidav.readthedocs.io/) via Docker.
 
@@ -177,58 +190,54 @@ docker compose up -d
 Then configure `savesyncx.ini`:
 
 ```ini
-host=192.168.1.100   # IP of the machine running Docker
+host=192.168.1.100
 port=80
 username=youruser
 password=yourpass
 remote_path=/SaveSync
+use_tls=0
 ```
 
-### Option B — Cloud WebDAV via the included proxy
+### Option B — Cloud WebDAV over HTTPS (no proxy needed)
 
-The Xbox cannot make HTTPS connections for WebDAV, but most cloud WebDAV providers (Koofr, Nextcloud, Box) require them. The included `webdav-proxy` solves this by accepting plain HTTP from the Xbox and forwarding it to the upstream provider over HTTPS.
+Since v1.3, SaveSyncX can connect directly to cloud WebDAV providers over HTTPS without any proxy or PC.
+
+> **Note:** Cloud providers require an application-specific password for WebDAV access rather than your account password. Generate one in your provider's account settings.
+
+#### Koofr
+
+Tested and confirmed working with v1.3.
+
+```ini
+host=app.koofr.net
+port=443
+username=you@example.com
+password=your-app-password
+remote_path=/dav/Koofr/SaveSync
+use_tls=1
+tls_verify=1
+```
+
+If certificate verification fails in the future (e.g. because the bundled trust anchors in `trust_anchors.h` no longer cover Koofr's certificate chain), set `tls_verify=0` to skip verification and restore connectivity.
+
+#### Other providers
+
+Other HTTPS WebDAV providers such as Nextcloud and Box should work with the same approach, but have not been tested. Set `host`, `port`, `username`, `password`, and `remote_path` for your provider, with `use_tls=1`. Use `tls_verify=0` if your server uses a self-signed certificate or if the bundled trust anchors do not cover it.
+
+### Option C — Cloud WebDAV via the included proxy (legacy)
+
+The `webdav-proxy` is no longer needed for most setups. It remains available for situations where a plain-HTTP intermediary is specifically required, for example when fronting a cloud provider with a local reverse proxy that does not support direct HTTPS from the Xbox for other reasons.
 
 ```
 Xbox (HTTP) → webdav-proxy → cloud provider (HTTPS)
 ```
 
-> **Note:** This proxy is only needed for backup and restore. The Download Saves feature connects directly to GitHub over HTTPS without a proxy.
-
-#### Setup
-
-Edit `webdav-proxy/docker-compose.yml` and set `UPSTREAM_HOST` to your provider:
-
-| Provider    | UPSTREAM_HOST               | remote_path prefix    |
-|------------|-----------------------------|-----------------------|
-| Koofr       | `app.koofr.net`             | `/dav/Koofr/`         |
-| Nextcloud   | `yournextcloud.example.com` | `/remote.php/dav/`    |
-| Box         | `dav.box.com`               | `/dav/`               |
-
-```yaml
-environment:
-  UPSTREAM_HOST: "app.koofr.net"
-  UPSTREAM_PORT: 443
-  LISTEN_PORT: 8080
-```
-
-Start the proxy:
+Edit `webdav-proxy/docker-compose.yml` and set `UPSTREAM_HOST` to your provider, then start it:
 
 ```sh
 cd webdav-proxy
 docker compose up -d
 ```
-
-Then configure `savesyncx.ini`:
-
-```ini
-host=192.168.1.100        # IP of the machine running the proxy
-port=8080
-username=you@example.com
-password=your-app-password
-remote_path=/dav/Koofr/SaveSync
-```
-
-> **Note:** Most cloud providers require an application-specific password for WebDAV access rather than your account password. Generate one in your provider's account settings.
 
 ---
 
@@ -291,7 +300,7 @@ src/
   backup.c/h        backup flow (scan → upload)
   restore.c/h       restore flow (pick title → pick snapshot → download → resign)
   download.c/h      Download Saves flow (fetch list.json → browse → download ZIP → extract → resign)
-  webdav.c/h        HTTP/WebDAV client (PUT, GET, MKCOL, PROPFIND, DELETE)
+  webdav.c/h        HTTP/HTTPS WebDAV client (PUT, GET, MKCOL, PROPFIND, DELETE) with optional BearSSL TLS
   github_fetch.c/h  HTTPS GET from raw.githubusercontent.com via BearSSL
   savelist.c/h      JSON parser for savegames/list.json
   unzip.c/h         In-memory ZIP extractor (stored + deflate, no external deps)
@@ -300,14 +309,14 @@ src/
   titledb.h         built-in title ID → name lookup table
   fileops.c/h       recursive directory upload/download helpers
   config.c/h        INI file parser, XBE path detection
-  trust_anchors.h   bundled TLS trust anchors for raw.githubusercontent.com
+  trust_anchors.h   bundled TLS trust anchors (used for both GitHub and WebDAV HTTPS)
   bearssl_inc/      BearSSL headers
 lib/
   ui.c/h            SDL2 framebuffer UI (menus, lists, settings screen, credits)
   util.c/h          logging, string helpers
   font8x16.h        embedded bitmap font
 webdav-proxy/
-  proxy.py          plain HTTP → HTTPS WebDAV proxy
+  proxy.py          plain HTTP → HTTPS WebDAV proxy (legacy, no longer required for most setups)
   Dockerfile
   docker-compose.yml
 savegames/
