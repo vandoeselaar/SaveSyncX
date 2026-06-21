@@ -9,6 +9,7 @@ typedef enum {
     MENU_MAIN = 0,
     MENU_BACKUP,
     MENU_RESTORE,
+    MENU_DOWNLOAD, 
     MENU_SETTINGS,
     MENU_CREDITS,
     MENU_EXIT,

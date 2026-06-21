@@ -19,6 +19,7 @@
 #include "restore.h"
 #include "webdav.h"
 #include "resign.h"
+#include "download.h"
 
 #include <winbase.h>
 
@@ -211,6 +212,9 @@ void __cdecl main(void)
                 break;
             case MENU_RESTORE:
                 do_restore(creds64, &cfg);
+                break;
+            case MENU_DOWNLOAD:                    
+                do_download(&cfg);
                 break;
             case MENU_SETTINGS:
                 do_settings_view(&cfg);

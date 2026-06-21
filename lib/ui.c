@@ -227,14 +227,15 @@ void ui_pump_events(void)
 static const char *MENU_LABELS[] = {
     "  Backup   save games  ->  WebDAV",
     "  Restore  save games  <-  WebDAV",
+    "  Download save games  <-  Github",
     "  Settings",
     "  Credits",
     "  Quit",
 };
 static const MenuID MENU_IDS[] = {
-    MENU_BACKUP, MENU_RESTORE, MENU_SETTINGS, MENU_CREDITS, MENU_EXIT
+    MENU_BACKUP, MENU_RESTORE, MENU_DOWNLOAD, MENU_SETTINGS, MENU_CREDITS, MENU_EXIT
 };
-#define MENU_COUNT 5
+#define MENU_COUNT 6
 
 MenuID ui_main_menu(void)
 {
@@ -641,7 +642,6 @@ void ui_set_cfg_ptr(AppConfig *cfg)
 void ui_credits_screen(void)
 {
     typedef struct { const char *label; const char *value; } Row;
-
     static const Row rows[] = {
         { "Author",    "vandoeselaar"                          },
         { "Source",    "github.com/vandoeselaar/SaveSyncX"    },
@@ -650,6 +650,7 @@ void ui_credits_screen(void)
         { "nxdk",      "github.com/XboxDev/nxdk"              },
         { "SDL2",      "via nxdk"                             },
         { "lwIP",      "via nxdk"                             },
+        { "BearSSL",   "bearssl.org"                          },
         { "",          ""                                      },
         { "References","---"                                   },
         { "Re-signing","feudalnate's resigner, XSavSig005"    },
@@ -666,7 +667,7 @@ void ui_credits_screen(void)
         ui_clear();
 
         ui_draw_text(MARGIN_X, MARGIN_Y,
-                     "  SaveSyncX  v1.0  --  Credits", COL_TITLE);
+                     "  SaveSyncX  v1.2  --  Credits", COL_TITLE);
         ui_fill_rect(MARGIN_X, MARGIN_Y + CHAR_H + 4,
                      SCREEN_W - MARGIN_X * 2, 1, COL_DIM);
 
@@ -691,7 +692,7 @@ void ui_credits_screen(void)
                      "[B] Back", COL_DIM);
         ui_draw_text(SCREEN_W - MARGIN_X - 14 * CHAR_W,
                      SCREEN_H - MARGIN_Y - CHAR_H,
-                     "SaveSyncX  v1.0", COL_DIM);
+                     "SaveSyncX  v1.2", COL_DIM);
 
         ui_flip();
         SDL_Delay(16);

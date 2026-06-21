@@ -13,12 +13,63 @@ SRCS = $(CURDIR)/src/main.c \
        $(CURDIR)/src/resign.c \
        $(CURDIR)/src/fileops.c \
        $(CURDIR)/src/titlescan.c \
+       $(CURDIR)/src/github_fetch.c \
+       $(CURDIR)/src/savelist.c \
+       $(CURDIR)/src/download.c \
+       $(CURDIR)/src/unzip.c \
        $(CURDIR)/lib/ui.c \
        $(CURDIR)/lib/util.c
 
-CFLAGS += -I$(CURDIR)/src \
-          -I$(CURDIR)/lib
+NXDK_CFLAGS += \
+    -I$(CURDIR)/src \
+    -I$(CURDIR)/lib \
+    -I$(CURDIR)/lib/bearssl_inc \
+    -I$(CURDIR)/lib/bearssl_src \
+    -DBR_AES_X86NI=0 -DBR_SSE2=0 -DBR_RDRAND=0 \
+    -DBR_POWER8=0 -DBR_USE_WIN32_RAND=0
 
 STACK_SIZE = 65536
 
 include $(NXDK_DIR)/Makefile
+
+# ── BearSSL ───────────────────────────────────────────────────────────────
+# Sluit hardware-specifieke bestanden uit: de Pentium III in de Xbox heeft
+# geen AES-NI, SSE2/CLMUL of POWER8. Die bestanden trekken intrinsics-headers
+# mee die niet compileren onder nxdk's i386-pc-win32 clang target.
+
+BEARSSL_EXCLUDE := \
+    $(CURDIR)/lib/bearssl_src/sysrng.c \
+    $(CURDIR)/lib/bearssl_src/aes_x86ni.c \
+    $(CURDIR)/lib/bearssl_src/aes_x86ni_cbcdec.c \
+    $(CURDIR)/lib/bearssl_src/aes_x86ni_cbcenc.c \
+    $(CURDIR)/lib/bearssl_src/aes_x86ni_ctr.c \
+    $(CURDIR)/lib/bearssl_src/aes_x86ni_ctrcbc.c \
+    $(CURDIR)/lib/bearssl_src/ghash_pclmul.c \
+    $(CURDIR)/lib/bearssl_src/chacha20_sse2.c \
+    $(CURDIR)/lib/bearssl_src/aes_pwr8.c \
+    $(CURDIR)/lib/bearssl_src/aes_pwr8_cbcdec.c \
+    $(CURDIR)/lib/bearssl_src/aes_pwr8_cbcenc.c \
+    $(CURDIR)/lib/bearssl_src/aes_pwr8_ctr.c \
+    $(CURDIR)/lib/bearssl_src/aes_pwr8_ctrcbc.c \
+    $(CURDIR)/lib/bearssl_src/ghash_pwr8.c
+
+BEARSSL_SRCS := $(filter-out $(BEARSSL_EXCLUDE), \
+                    $(wildcard $(CURDIR)/lib/bearssl_src/*.c))
+BEARSSL_OBJS := $(patsubst %.c,%.obj,$(BEARSSL_SRCS))
+
+# BearSSL objecten toevoegen aan de nxdk link-stap.
+# Let op: OBJS += moet NA de include van nxdk/Makefile staan (anders
+# overschrijft nxdk's "OBJS = ..." onze toevoeging).
+OBJS += $(BEARSSL_OBJS)
+
+# Compilerregel voor BearSSL bronnen.
+# Wno-* flags onderdrukken BearSSL-interne warnings die wij niet willen fixen.
+$(CURDIR)/lib/bearssl_src/%.obj: $(CURDIR)/lib/bearssl_src/%.c
+	@echo "  CC [bearssl] $(notdir $<)"
+	$(CC) $(NXDK_CFLAGS) \
+	      -Wno-unused-function -Wno-unused-variable \
+	      -Wno-sign-compare -Wno-type-limits -Wno-error \
+	      -Os -c -o '$@' '$<'
+
+# Zorg dat BearSSL objecten klaar zijn voor de link-stap
+main.exe: $(BEARSSL_OBJS)
