@@ -163,6 +163,7 @@ void __cdecl main(void)
     AppConfig cfg;
     config_defaults(&cfg);
     config_load(&cfg, ini_path[0] ? ini_path : NULL);
+    webdav_init(&cfg);
     log_print("remote_base: %s\n", cfg.remote_base);
 
     if (!config_is_valid(&cfg)) {

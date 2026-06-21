@@ -180,7 +180,9 @@ void config_defaults(AppConfig *cfg)
 {
     memset(cfg, 0, sizeof(*cfg));
     strncpy(cfg->host,        WEBDAV_DEFAULT_HOST,      sizeof(cfg->host)        - 1);
-    cfg->port    = WEBDAV_DEFAULT_PORT;
+    cfg->port          = WEBDAV_DEFAULT_PORT;
+    cfg->use_tls       = 0;   /* standaard plain HTTP — bestaande setups breken niet */
+    cfg->tls_no_verify = 0;   /* als TLS aan staat, verificeer certificaat            */
     strncpy(cfg->remote_base, WEBDAV_DEFAULT_BASE_PATH, sizeof(cfg->remote_base) - 1);
     /* username en password blijven leeg; gebruiker moet die invullen */
 }
@@ -211,11 +213,13 @@ int config_load(AppConfig *cfg, const char *path)
         char *key, *val;
         if (!parse_line(p, &key, &val)) continue;
 
-        if      (strcmp(key, CFG_KEY_HOST) == 0) strncpy(cfg->host,        val, sizeof(cfg->host)        - 1);
-        else if (strcmp(key, CFG_KEY_PORT) == 0) cfg->port    = atoi(val);
-        else if (strcmp(key, CFG_KEY_USER) == 0) strncpy(cfg->username,    val, sizeof(cfg->username)    - 1);
-        else if (strcmp(key, CFG_KEY_PASS) == 0) strncpy(cfg->password,    val, sizeof(cfg->password)    - 1);
-        else if (strcmp(key, CFG_KEY_PATH) == 0) strncpy(cfg->remote_base, val, sizeof(cfg->remote_base) - 1);
+        if      (strcmp(key, CFG_KEY_HOST)       == 0) strncpy(cfg->host,        val, sizeof(cfg->host)        - 1);
+        else if (strcmp(key, CFG_KEY_PORT)       == 0) cfg->port          = atoi(val);
+        else if (strcmp(key, CFG_KEY_USER)       == 0) strncpy(cfg->username,    val, sizeof(cfg->username)    - 1);
+        else if (strcmp(key, CFG_KEY_PASS)       == 0) strncpy(cfg->password,    val, sizeof(cfg->password)    - 1);
+        else if (strcmp(key, CFG_KEY_PATH)       == 0) strncpy(cfg->remote_base, val, sizeof(cfg->remote_base) - 1);
+        else if (strcmp(key, CFG_KEY_TLS)        == 0) cfg->use_tls       = atoi(val);
+        else if (strcmp(key, CFG_KEY_TLS_VERIFY) == 0) cfg->tls_no_verify = (atoi(val) == 0) ? 1 : 0;
         /* onbekende sleutels stilzwijgend negeren */
     }
 
@@ -243,6 +247,10 @@ int config_save(const AppConfig *cfg)
     fprintf(f, "%s=%s\n",  CFG_KEY_USER, cfg->username);
     fprintf(f, "%s=%s\n",  CFG_KEY_PASS, cfg->password);
     fprintf(f, "%s=%s\n",  CFG_KEY_PATH, cfg->remote_base);
+    fprintf(f, "%s=%d\n",  CFG_KEY_TLS,  cfg->use_tls);
+    /* tls_verify is het inverse van tls_no_verify voor leesbaarheid in het ini-bestand:
+       tls_verify=1 betekent "verificeer het certificaat" (= tls_no_verify=0) */
+    fprintf(f, "%s=%d\n",  CFG_KEY_TLS_VERIFY, cfg->tls_no_verify ? 0 : 1);
 
     fclose(f);
     return 0;

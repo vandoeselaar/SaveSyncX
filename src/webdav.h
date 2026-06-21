@@ -6,11 +6,25 @@
 #include <stddef.h>
 
 /*
- * webdav.h  –  WebDAV client over LwIP/TCP
+ * webdav.h  –  WebDAV client over LwIP/TCP, optioneel via BearSSL TLS
  *
  * All functions take a host (IP or hostname string) and port.
  * creds64 is a Base64-encoded "username:password" string for Basic auth.
+ *
+ * v1.3: roep webdav_init(cfg) aan vanuit main.c na config_load() zodat
+ * de TLS-instellingen (use_tls, tls_no_verify) van kracht worden.
+ * Alle andere functies zijn ongewijzigd.
  */
+
+/*
+ * webdav_init  –  Stel TLS-gedrag in op basis van de AppConfig.
+ *
+ * Moet eenmalig worden aangeroepen vanuit main.c na config_load().
+ * cfg->use_tls=1 schakelt HTTPS in voor alle WebDAV-verbindingen.
+ * cfg->tls_no_verify=1 schakelt certificaatverificatie uit
+ * (handig voor zelfgesigneerde certs, bijv. Nextcloud eigen CA).
+ */
+void webdav_init(const AppConfig *cfg);
 
 /*
  * webdav_base64_encode  –  Encode binary data as Base64 string.
@@ -81,12 +95,10 @@ int webdav_list_directory_ex(const char *remote_path,
 /*
  * upload_dir  –  Recursively upload a local directory tree via PUT + MKCOL.
  *
- * progress mag NULL zijn (geen UI-feedback, gedraagt zich als voorheen).
+ * progress mag NULL zijn (geen UI-feedback).
  * Als progress niet NULL is, moet de CALLER vooraf al hebben ingevuld:
  *   progress->files_total, progress->bytes_total  (bijv. via fileops_scan)
  *   progress->files_done = 0, progress->bytes_done = 0, progress->error = 0
- * upload_dir roept dan na elk bestand ui_progress() aan, wat ook de
- * B-knop (annuleren) afhandelt.
  *
  * Returns number of files successfully uploaded, or -1 if the user
  * cancelled the transfer via ui_progress.
