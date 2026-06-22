@@ -20,6 +20,11 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.3.1
+
+- **Startup connectivity checks** — SaveSyncX now tests both WebDAV and GitHub reachability at startup instead of only WebDAV. If WebDAV is unavailable, Backup and Restore are disabled in the menu. If GitHub is unreachable, Download is disabled. The app only exits if both services fail simultaneously.
+- **Version string centralised** — `APP_VERSION` and `APP_TITLE` are now defined once in `config.h` and referenced throughout the UI, eliminating the version string drift between screens.
+
 ### v1.3
 
 - **HTTPS WebDAV (backup/restore)** — the Xbox can now connect directly to HTTPS WebDAV servers for backup and restore, using the same BearSSL TLS stack introduced in v1.2 for GitHub downloads. Cloud providers such as Koofr, Nextcloud, and Box work without any proxy or PC in the middle. Set `use_tls=1` in `savesyncx.ini` to enable.
