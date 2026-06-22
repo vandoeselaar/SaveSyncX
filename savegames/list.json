@@ -71,6 +71,34 @@
           "notes": "Artemis and Drizzt !"
         }
       ]
+    },
+    {
+      "title_id": "43430008",
+      "game_name": "CAPCOM VS. SNK2 EO",
+      "saves": [
+        {
+          "id": "capcom_vs_snk_2_eo_game_save_2",
+          "label": "GameSystem - Shin Gouki/God Rugal/EX Option/Groove Edit/Infinite Groove Points/Boss Mode/EX Groove all unlocked",
+          "file": "savegames/43430008/capcom_vs_snk_2_eo_game_save_2.zip",
+          "size_bytes": 10893,
+          "author": "Mentski/JC",
+          "notes": "Shin Gouki/God Rugal/EX Option/Groove Edit/Infinite Groove Points/Boss Mode/EX Groove all unlocked"
+        }
+      ]
+    },
+    {
+      "title_id": "4143000e",
+      "game_name": "BMX XXX",
+      "saves": [
+        {
+          "id": "bmx_xxx_game_save_all_riders",
+          "label": "BMX XXX Save - All riders, extras & movies unlocked",
+          "file": "savegames/4143000e/bmx_xxx_game_save_all_riders.zip",
+          "size_bytes": 8022,
+          "author": "NicNaudy",
+          "notes": "All riders, extras & movies unlocked"
+        }
+      ]
     }
   ]
 }
