@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2025-06-19",
+  "updated": "2025-06-22",
   "saves": [
     {
       "title_id": "4541005b",
@@ -27,6 +27,34 @@
           "size_bytes": 8176,
           "author": "ScrewAR",
           "notes": "All events unlocked, 100% complete"
+        }
+      ]
+    },
+    {
+      "title_id": "41430019",
+      "game_name": "Burnout 2",
+      "saves": [
+        {
+          "id": "XSX_100pct",
+          "label": "100% Complete",
+          "file": "savegames/41430019/burnout2_100pct.zip",
+          "size_bytes": 18000,
+          "author": "XSX",
+          "notes": "All events unlocked, 100% complete"
+        }
+      ]
+    },
+    {
+      "title_id": "5451001d",
+      "game_name": "Broken Sword - The Sleeping Dragon",
+      "saves": [
+        {
+          "id": "BrokenSword_TSD",
+          "label": "100% Complete",
+          "file": "savegames/5451001d/brokenswordthesleepingdragon.zip",
+          "size_bytes": 35650,
+          "author": "",
+          "notes": ""
         }
       ]
     }
