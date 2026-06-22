@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2025-06-22",
+  "updated": "2026-06-22",
   "saves": [
     {
       "title_id": "4541005b",
@@ -41,6 +41,20 @@
           "size_bytes": 35650,
           "author": "Unknown",
           "notes": "Press Y To Climb In Through The Window, Untie Bruno And Climb back out"
+        }
+      ]
+    },
+    {
+      "title_id": "45410083",
+      "game_name": "Black",
+      "saves": [
+        {
+          "id": "black_100_complete_everything_unlocked",
+          "label": "Profile - 100% complete. Everything unlocked.",
+          "file": "savegames/45410083/black_100_complete_everything_unlocked.zip",
+          "size_bytes": 5927,
+          "author": "Grindie",
+          "notes": "100% complete. Everything unlocked."
         }
       ]
     }
