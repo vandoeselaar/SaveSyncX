@@ -99,6 +99,20 @@
           "notes": "All riders, extras & movies unlocked"
         }
       ]
+    },
+    {
+      "title_id": "4143000a",
+      "game_name": "ATV: Quad Power Racing 2",
+      "saves": [
+        {
+          "id": "atv_quad_power_racing_2_game_save_100",
+          "label": "Profile 1 - No description",
+          "file": "savegames/4143000a/atv_quad_power_racing_2_game_save_100.zip",
+          "size_bytes": 360985,
+          "author": "Unknown",
+          "notes": "No description"
+        }
+      ]
     }
   ]
 }
