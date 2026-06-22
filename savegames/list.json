@@ -57,6 +57,20 @@
           "notes": "100% complete. Everything unlocked."
         }
       ]
+    },
+    {
+      "title_id": "4950000a",
+      "game_name": "Baldur's Gate: Dark Alliance 2",
+      "saves": [
+        {
+          "id": "baldurs_gate_dark_alliance_2_save_artemis_and_drizzt",
+          "label": "Trollbark Forest - Artemis and Drizzt !",
+          "file": "savegames/4950000a/baldurs_gate_dark_alliance_2_save_artemis_and_drizzt.zip",
+          "size_bytes": 25823,
+          "author": "RazZer0",
+          "notes": "Artemis and Drizzt !"
+        }
+      ]
     }
   ]
 }
