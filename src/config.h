@@ -1,6 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define APP_VERSION  "v1.3.1"
+#define APP_TITLE    "SaveSyncX  " APP_VERSION
+
 /* ── WebDAV Server Settings ─────────────────────────────────────────────── */
 /* Edit these values, or store them in E:\savesync.ini on the Xbox           */
 

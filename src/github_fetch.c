@@ -69,6 +69,12 @@ static int tcp_connect(const char *host, int port)
     return fd;
 }
 
+int github_test_connection(void) {
+    int fd = tcp_connect(GITHUB_RAW_HOST, GITHUB_RAW_PORT);
+    if (fd < 0) return 0;
+    closesocket(fd);
+    return 1;
+}
 
 /* ── BearSSL engine driver ────────────────────────────────────────────────── */
 /*

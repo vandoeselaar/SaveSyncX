@@ -20,6 +20,7 @@
 #include "webdav.h"
 #include "resign.h"
 #include "download.h"
+#include "github_fetch.h"
 
 #include <winbase.h>
 
@@ -67,7 +68,6 @@ static int initial_test(const AppConfig *cfg, const char *creds64)
                    body, (int)strlen(body), NULL, 0, &status);
     return status;
 }
-
 
 /* ── Main ─────────────────────────────────────────────────────── */
 void __cdecl main(void)
@@ -178,19 +178,37 @@ void __cdecl main(void)
     snprintf(creds, sizeof(creds), "%s:%s", cfg.username, cfg.password);
     webdav_base64_encode((const unsigned char *)creds, strlen(creds), creds64);
 
-    /* Initiële test */
-    ui_message_nowait("SaveSyncX", "Test connection...");
+    /* ── Connectietests ──────────────────────────────────────────── */
+    int webdav_ok = 0;
+    int github_ok = 0;
+
+    ui_message_nowait("SaveSyncX", "Test WebDAV connection...");
     int test_status = initial_test(&cfg, creds64);
-    {
-        char msg[64];
-        if (test_status == 200 || test_status == 201 || test_status == 204){
-            snprintf(msg, sizeof(msg), "Connection test OK  (HTTP %d)", test_status);
-            ui_message_timeout("SaveSyncX", msg, 2000);
-        } else {
-            snprintf(msg, sizeof(msg), "Connection test Failed  (HTTP %d)", test_status);
-            ui_message_timeout("SaveSyncX", msg, 2000);
-            ui_shutdown();
-        }
+    webdav_ok = (test_status == 200 || test_status == 201 || test_status == 204);
+    log_print("WebDAV test: HTTP %d -> %s\n", test_status, webdav_ok ? "OK" : "FAIL");
+
+    ui_message_nowait("SaveSyncX", "Test GitHub connection...");
+    github_ok = github_test_connection();
+    log_print("GitHub test: %s\n", github_ok ? "OK" : "FAIL");
+
+    if (!webdav_ok && !github_ok) {
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+                 "WebDAV: HTTP %d\nGitHub: unreachable\n\nNo services available.",
+                 test_status);
+        ui_message("Error", msg);
+        ui_shutdown();
+        nxNetShutdown();
+        return;
+    }
+    if (!webdav_ok) {
+        char msg[80];
+        snprintf(msg, sizeof(msg),
+                 "WebDAV unavailable (HTTP %d)\nBackup/Restore disabled.", test_status);
+        ui_message_timeout("Warning", msg, 3000);
+    }
+    if (!github_ok) {
+        ui_message_timeout("Warning", "GitHub unreachable\nDownload disabled.", 3000);
     }
 
     /* Titels scannen (één keer, voor Backup) */
@@ -204,8 +222,11 @@ void __cdecl main(void)
     }
 
     /* ── Hoofdmenu loop (gebruikt ui_main_menu) ───────────────────── */
+    int flags = (webdav_ok ? UI_FLAG_WEBDAV_OK : 0)
+              | (github_ok ? UI_FLAG_GITHUB_OK  : 0);
+
     while (1) {
-        MenuID choice = ui_main_menu();
+        MenuID choice = ui_main_menu(flags);
 
         switch (choice) {
             case MENU_BACKUP:

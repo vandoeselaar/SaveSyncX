@@ -276,7 +276,7 @@ void do_restore(const char *creds64, const AppConfig *cfg)
         if (btn_pressed(BTN_B))     return;
         if (btn_pressed(BTN_A))     break;
         if (redraw) {
-            draw_pick_list("  SaveSyncX  v1.0  --  Restore",
+            draw_pick_list("  " APP_TITLE "  --  Restore",
                            title_display, title_count, title_sel,
                            "up/down=scroll  A=select  B=back  Y=delete");
             redraw = 0;

@@ -27,5 +27,6 @@
  * Bij succes is out_buf altijd null-terminated.
  */
 int github_fetch_raw(const char *path, char *out_buf, int out_size);
+int github_test_connection(void);
 
 #endif /* GITHUB_FETCH_H */

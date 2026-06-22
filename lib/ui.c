@@ -237,7 +237,7 @@ static const MenuID MENU_IDS[] = {
 };
 #define MENU_COUNT 6
 
-MenuID ui_main_menu(void)
+MenuID ui_main_menu(int flags)
 {
     int sel = 0;
     static ScrollState scroll = {0};
@@ -247,16 +247,19 @@ MenuID ui_main_menu(void)
         int delta = scroll_update(&scroll, MENU_COUNT);
         scroll_apply(&sel, delta, MENU_COUNT);
 
-        if (btn_pressed(BTN_A) || btn_pressed(BTN_START))
-            return MENU_IDS[sel];
-
-        //if (btn_pressed(DPAD_DOWN)) sel = (sel + 1) % MENU_COUNT;
-        //if (btn_pressed(DPAD_UP))   sel = (sel + MENU_COUNT - 1) % MENU_COUNT;
-        //if (btn_pressed(BTN_A) || btn_pressed(BTN_START))
-        //    return MENU_IDS[sel];
+        /* A/Start: alleen bevestigen als item niet disabled is */
+        if (btn_pressed(BTN_A) || btn_pressed(BTN_START)) {
+            int sel_disabled = 0;
+            if (MENU_IDS[sel] == MENU_BACKUP || MENU_IDS[sel] == MENU_RESTORE)
+                sel_disabled = !(flags & UI_FLAG_WEBDAV_OK);
+            if (MENU_IDS[sel] == MENU_DOWNLOAD)
+                sel_disabled = !(flags & UI_FLAG_GITHUB_OK);
+            if (!sel_disabled)
+                return MENU_IDS[sel];
+        }
 
         ui_clear();
-        ui_draw_text(MARGIN_X, MARGIN_Y, "  SaveSyncX  v1.0", COL_TITLE);
+        ui_draw_text(MARGIN_X, MARGIN_Y, "  " APP_TITLE, COL_TITLE);
         ui_draw_text(MARGIN_X, MARGIN_Y + CHAR_H,
                   "  TDATA / UDATA  <->  WebDAV", COL_DIM);
 
@@ -265,9 +268,17 @@ MenuID ui_main_menu(void)
                   COL_DIM);
 
         for (int i = 0; i < MENU_COUNT; i++) {
-            Uint32 col = (i == sel) ? COL_SELECT : COL_ITEM;
+            int item_disabled = 0;
+            if (MENU_IDS[i] == MENU_BACKUP || MENU_IDS[i] == MENU_RESTORE)
+                item_disabled = !(flags & UI_FLAG_WEBDAV_OK);
+            if (MENU_IDS[i] == MENU_DOWNLOAD)
+                item_disabled = !(flags & UI_FLAG_GITHUB_OK);
+
+            Uint32 col = item_disabled ? COL_DIM
+                       : (i == sel)    ? COL_SELECT
+                                       : COL_ITEM;
             int y = MARGIN_Y + CHAR_H * (5 + i * 2);
-            if (i == sel)
+            if (i == sel && !item_disabled)
                 ui_fill_rect(MARGIN_X - 4, y - 2,
                           SCREEN_W - MARGIN_X * 2 + 8, CHAR_H + 4,
                           0xFF001428);
@@ -666,8 +677,7 @@ void ui_credits_screen(void)
 
         ui_clear();
 
-        ui_draw_text(MARGIN_X, MARGIN_Y,
-                     "  SaveSyncX  v1.2  --  Credits", COL_TITLE);
+        ui_draw_text(MARGIN_X, MARGIN_Y, "  " APP_TITLE, COL_TITLE);
         ui_fill_rect(MARGIN_X, MARGIN_Y + CHAR_H + 4,
                      SCREEN_W - MARGIN_X * 2, 1, COL_DIM);
 
@@ -692,7 +702,7 @@ void ui_credits_screen(void)
                      "[B] Back", COL_DIM);
         ui_draw_text(SCREEN_W - MARGIN_X - 14 * CHAR_W,
                      SCREEN_H - MARGIN_Y - CHAR_H,
-                     "SaveSyncX  v1.2", COL_DIM);
+                     APP_TITLE, COL_DIM);
 
         ui_flip();
         SDL_Delay(16);

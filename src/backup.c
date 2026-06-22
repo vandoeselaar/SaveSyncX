@@ -70,7 +70,7 @@ static void draw_list(const TitleEntry *titles, int n,
     int total_pages = (n + LIST_PAGE_SIZE - 1) / LIST_PAGE_SIZE;
 
     ui_clear();
-    ui_draw_text(MARGIN_X, MARGIN_Y, "  SaveSyncX  v1.0  --  Backup", UI_COL_TITLE);
+    ui_draw_text(MARGIN_X, MARGIN_Y, "  " APP_TITLE "  --  Backup", UI_COL_TITLE);
     char hdr[64];
     snprintf(hdr, sizeof(hdr), "page %d / %d   (%d titles)",
              page + 1, total_pages, n);

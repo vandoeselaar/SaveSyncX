@@ -22,6 +22,8 @@ typedef enum {
 #define MARGIN_X       32
 #define MARGIN_Y       24
 #define LIST_PAGE_SIZE 18
+#define UI_FLAG_WEBDAV_OK  (1 << 0)
+#define UI_FLAG_GITHUB_OK  (1 << 1)
 
 /* ── Log buffer size ─────────────────────────────────────────────────────── */
 #define TRANSFER_LOG_LINES  8
@@ -69,7 +71,7 @@ void ui_shutdown(void);
 
 /* ── Main event loop ─────────────────────────────────────────────────────── */
 /*  Returns the MenuID the user confirmed, or MENU_EXIT to quit.            */
-MenuID ui_main_menu(void);
+MenuID ui_main_menu(int flags);
 
 /* ── Settings editor (d-pad to navigate, on-screen keyboard for text) ───── */
 int ui_settings_screen(void);     /* Returns 0 if saved, -1 if cancelled  */
