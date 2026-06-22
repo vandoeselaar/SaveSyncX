@@ -31,20 +31,6 @@
       ]
     },
     {
-      "title_id": "41430019",
-      "game_name": "Burnout 2",
-      "saves": [
-        {
-          "id": "XSX_100pct",
-          "label": "100% Complete",
-          "file": "savegames/41430019/burnout2_100pct.zip",
-          "size_bytes": 18000,
-          "author": "XSX",
-          "notes": "All events unlocked, 100% complete"
-        }
-      ]
-    },
-    {
       "title_id": "5451001d",
       "game_name": "Broken Sword - The Sleeping Dragon",
       "saves": [
