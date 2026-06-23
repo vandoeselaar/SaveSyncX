@@ -51,7 +51,7 @@ static void fmt_size(int bytes, char *out, int out_len)
 /* ── Download + opslaan van een zip-bestand ─────────────────────────────── */
 static int download_save(const SaveEntry *se)
 {
-    /* Bouw het volledige pad: /vandoeselaar/SaveSyncX-Saves/main/savegames/... */
+    /* Bouw het volledige pad: /vandoeselaar/SaveSyncX-Saves/main/... */
     char path[256];
     snprintf(path, sizeof(path), "/" "%s%s",
              "vandoeselaar/SaveSyncX-Saves/main/",
@@ -89,26 +89,22 @@ static int download_save(const SaveEntry *se)
 
     /*
      * Resign check: de ZIP-rootmap is de TitleID (bijv. "4541005b").
-     * We halen de TitleID uit se->file: "savegames/{titleid}/...".
+     * We halen de TitleID uit se->file: "{titleid}/...".
      * resign_lookup verwacht uppercase.
      */
     char title_id_lower[16] = "";
     char title_id_upper[16] = "";
 
-    /* Extraheer TitleID uit "savegames/4541005b/..." */
-    const char *sg = strstr(se->file, "savegames/");
-    if (sg) {
-        sg += strlen("savegames/");
-        int i = 0;
-        while (sg[i] && sg[i] != '/' && i < 15) {
-            title_id_lower[i] = sg[i];
-            /* uppercase voor resign_lookup */
-            title_id_upper[i] = (sg[i] >= 'a' && sg[i] <= 'f')
-                                 ? sg[i] - 32 : sg[i];
-            i++;
-        }
-        title_id_lower[i] = title_id_upper[i] = '\0';
+    /* Extraheer TitleID uit "/4541005b/..." */
+    const char *sg = se->file;
+    int i = 0;
+    while (sg[i] && sg[i] != '/' && i < 15) {
+        title_id_lower[i] = sg[i];
+        title_id_upper[i] = (sg[i] >= 'a' && sg[i] <= 'f')
+                             ? sg[i] - 32 : sg[i];
+        i++;
     }
+    title_id_lower[i] = title_id_upper[i] = '\0';
 
     const NonRoamableEntry *entry = title_id_upper[0]
                                     ? resign_lookup(title_id_upper)
@@ -330,7 +326,7 @@ int do_download(const AppConfig *cfg)
     }
 
     int len = github_fetch_raw(
-        "/vandoeselaar/SaveSyncX-Saves/main/savegames/list.json",
+        "/vandoeselaar/SaveSyncX-Saves/main/list.json",
         json_buf, LIST_JSON_MAX);
 
     if (len <= 0) {
