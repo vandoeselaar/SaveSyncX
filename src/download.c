@@ -25,7 +25,7 @@
 #include <string.h>
 
 /* URL-prefix voor downloads — bestandspad in SaveEntry is relatief hieraan */
-#define GITHUB_RAW_PATH_PREFIX  "/vandoeselaar/SaveSyncX/main/"
+#define GITHUB_RAW_PATH_PREFIX  "/vandoeselaar/SaveSyncX-Saves/main/"
 
 /* Maximale grootte van de list.json response */
 #define LIST_JSON_MAX   16384
@@ -51,10 +51,10 @@ static void fmt_size(int bytes, char *out, int out_len)
 /* ── Download + opslaan van een zip-bestand ─────────────────────────────── */
 static int download_save(const SaveEntry *se)
 {
-    /* Bouw het volledige pad: /vandoeselaar/SaveSyncX/main/savegames/... */
+    /* Bouw het volledige pad: /vandoeselaar/SaveSyncX-Saves/main/savegames/... */
     char path[256];
     snprintf(path, sizeof(path), "/" "%s%s",
-             "vandoeselaar/SaveSyncX/main/",
+             "vandoeselaar/SaveSyncX-Saves/main/",
              se->file);
 
     log_print("[DL] downloading %s\n", path);
@@ -330,7 +330,7 @@ int do_download(const AppConfig *cfg)
     }
 
     int len = github_fetch_raw(
-        "/vandoeselaar/SaveSyncX/main/savegames/list.json",
+        "/vandoeselaar/SaveSyncX-Saves/main/savegames/list.json",
         json_buf, LIST_JSON_MAX);
 
     if (len <= 0) {
