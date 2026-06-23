@@ -344,7 +344,9 @@ int unzip_to_dir(const unsigned char *zip_data, int zip_len,
             slash_to_backslash(bs);
             int fl = (int)strlen(bs);
             if (fl > 0 && bs[fl-1] == '\\') bs[fl-1] = '\0';
-            snprintf(dir_path, sizeof(dir_path), "%s\\%s", dest_dir, bs);
+            const char *bs_rel = (strncmp(bs, "UDATA\\", 6) == 0) ? bs + 6 : bs;
+            if (bs_rel[0] == '\0') { pos = data_offset + (int)comp_size; continue; }
+            snprintf(dir_path, sizeof(dir_path), "%s\\%s", dest_dir, bs_rel);
             fileops_ensure_dir(dir_path);
             log_print("[UZ] map: %s\n", dir_path);
             pos = data_offset + (int)comp_size; continue;
@@ -354,7 +356,8 @@ int unzip_to_dir(const unsigned char *zip_data, int zip_len,
         char bs[ZIP_MAX_PATH], dest_path[MAX_PATH_LEN];
         strncpy(bs, fname, sizeof(bs)-1); bs[sizeof(bs)-1] = '\0';
         slash_to_backslash(bs);
-        snprintf(dest_path, sizeof(dest_path), "%s\\%s", dest_dir, bs);
+        const char *bs_rel = (strncmp(bs, "UDATA\\", 6) == 0) ? bs + 6 : bs;
+        snprintf(dest_path, sizeof(dest_path), "%s\\%s", dest_dir, bs_rel);
         log_print("[UZ] %s (%lu bytes)\n", dest_path, uncomp_size);
 
         const unsigned char *entry = zip_data + data_offset;
