@@ -20,6 +20,13 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.3.2 – Bugfix
+
+- **Fix:** Downloaded saves were extracted to `UDATA\UDATA\<titleid>\` instead of
+  `UDATA\<titleid>\` because the zip already contains a `UDATA/` root folder.
+  The unzip routine now strips the leading `UDATA\` prefix from paths before
+  combining with the destination directory.
+  
 ### v1.3.1
 
 - **Startup connectivity checks** — SaveSyncX now tests both WebDAV and GitHub reachability at startup instead of only WebDAV. If WebDAV is unavailable, Backup and Restore are disabled in the menu. If GitHub is unreachable, Download is disabled. The app only exits if both services fail simultaneously.
