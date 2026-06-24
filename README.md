@@ -20,6 +20,14 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.4 – Non-Roamable Save Support & Community Saves
+
+* **Non-roamable resign on download** — saves that require console-specific signing are now automatically re-signed with the local Xbox's HDDKey after download. The resign engine reads the XboxHDKey directly from the kernel export and applies HMAC-SHA1 (and where required, a CRC pre-pass) without any PC-side tooling.
+
+### v1.3.3 – Bugfix
+
+- **Change** Updated to use the new game saves repo
+  
 ### v1.3.2 – Bugfix
 
 - **Fix:** Downloaded saves were extracted to `UDATA\UDATA\<titleid>\` instead of
