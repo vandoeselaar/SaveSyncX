@@ -29,6 +29,7 @@ typedef enum {
     SIGN_NOROAM  = 1,   /* HMAC-SHA1 over save data with XboxHDKey          */
     SIGN_FORZA   = 2,   /* Forza Motorsport – custom signing (ForzaSign)    */
     SIGN_PSO     = 3,   /* Phantasy Star Online – signs ALL PSO* files      */
+    SIGN_DOAX    = 4,   /* Dead or Alive Xtreme – two signed regions + XOR64 */
 } SignType;
 
 /* ── Per-title entry ─────────────────────────────────────────────────────── */
@@ -40,6 +41,8 @@ typedef struct {
     int           data_offset;
     int           sig_offset;
     int           sig_size;
+    int           crc32_offset; /* -1 = geen CRC; anders: absolute offset van 4-byte XOR32 veld
+                                 *  dat voor resign herberekend moet worden over [data_offset, crc32_offset) */
     const char   *sig_filename; /* NULL = alle bestanden; anders exact bestandsnaam */
 } NonRoamableEntry;
 
