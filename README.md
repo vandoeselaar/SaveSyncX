@@ -20,6 +20,14 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.3.3 – Bugfix
+
+- **Change** Updated to use the new game saves repo
+- **Fix:** Downloaded saves were extracted to `UDATA\UDATA\<titleid>\` instead of
+  `UDATA\<titleid>\` because the zip already contains a `UDATA/` root folder.
+  The unzip routine now strips the leading `UDATA\` prefix from paths before
+  combining with the destination directory.
+  
 ### v1.3.2 – Bugfix
 
 - **Fix:** Downloaded saves were extracted to `UDATA\UDATA\<titleid>\` instead of
