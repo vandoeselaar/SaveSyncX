@@ -6,6 +6,7 @@
  */
 
 #include "titlescan.h"
+#include <stdlib.h>  
 #include <string.h>
 #include <windows.h>
 #include <stdio.h>
@@ -152,6 +153,14 @@ static void scan_dir(const char *base_path, int is_udata,
     FindClose(h);
 }
 
+/* ── Vergelijkfunctie voor alfabetische sortering ─────────────────────── */
+static int cmp_title_entry(const void *a, const void *b)
+{
+    const TitleEntry *ea = (const TitleEntry *)a;
+    const TitleEntry *eb = (const TitleEntry *)b;
+    return strcmp(ea->title_name, eb->title_name);
+}
+
 /* ── Public API ───────────────────────────────────────────────────────────*/
 int titlescan_scan(TitleEntry *entries, int max)
 {
@@ -159,6 +168,8 @@ int titlescan_scan(TitleEntry *entries, int max)
 
     scan_dir("E:\\UDATA", 1, entries, &count, max);
     scan_dir("E:\\TDATA", 0, entries, &count, max);
+
+    qsort(entries, count, sizeof(TitleEntry), cmp_title_entry); 
 
     return count;
 }

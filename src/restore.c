@@ -238,9 +238,13 @@ static int webdav_delete_dir(const char *remote_path,
 /* ── Hoofdfunctie: restore flow ─────────────────────────────────── */
 void do_restore(const char *creds64, const AppConfig *cfg)
 {
-    /* ── Stap 1: kies TitleID ───────────────────────────────────── */
     static char title_list[128][MAX_PATH_LEN];
-    int title_count;
+    static char title_display[128][MAX_PATH_LEN];
+    static char title_sortkey[128][MAX_PATH_LEN];
+    int title_count; 
+    memset(title_list,    0, sizeof(title_list));
+    memset(title_display, 0, sizeof(title_display));
+    memset(title_sortkey, 0, sizeof(title_sortkey));
 
     log_print("[Stap 1] Ophalen titellijst van server: %s\n", cfg->remote_base);
     ui_message_nowait("Restore", "Loading title list from server...");
@@ -253,16 +257,35 @@ void do_restore(const char *creds64, const AppConfig *cfg)
         return;
     }
 
-    static char title_display[128][MAX_PATH_LEN];
     for (int i = 0; i < title_count; i++) {
         uint32_t title_id = (uint32_t)strtoul(title_list[i], NULL, 16);
         const char *name = title_lookup(title_id);
         if (name) {
             snprintf(title_display[i], sizeof(title_display[i]),
                      "[%s] %s", title_list[i], name);
+            strncpy(title_sortkey[i], name, MAX_PATH_LEN - 1);
         } else {
             snprintf(title_display[i], sizeof(title_display[i]),
                      "[%s]", title_list[i]);
+            strncpy(title_sortkey[i], title_list[i], MAX_PATH_LEN - 1);
+        }
+    }
+
+    /* Bubble sort op naam (sortkey), title_list synchroon mee */
+    for (int i = 0; i < title_count - 1; i++) {
+        for (int j = 0; j < title_count - 1 - i; j++) {
+            if (strcmp(title_sortkey[j], title_sortkey[j+1]) > 0) {
+                char tmp[MAX_PATH_LEN];
+                memcpy(tmp, title_display[j],  MAX_PATH_LEN);
+                memcpy(title_display[j],  title_display[j+1],  MAX_PATH_LEN);
+                memcpy(title_display[j+1], tmp, MAX_PATH_LEN);
+                memcpy(tmp, title_list[j],    MAX_PATH_LEN);
+                memcpy(title_list[j],    title_list[j+1],    MAX_PATH_LEN);
+                memcpy(title_list[j+1],   tmp, MAX_PATH_LEN);
+                memcpy(tmp, title_sortkey[j], MAX_PATH_LEN);
+                memcpy(title_sortkey[j], title_sortkey[j+1], MAX_PATH_LEN);
+                memcpy(title_sortkey[j+1], tmp, MAX_PATH_LEN);
+            }
         }
     }
 

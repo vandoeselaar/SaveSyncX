@@ -22,6 +22,24 @@ static void get_timestamp(char *buf, size_t bufsz)
              st.wHour, st.wMinute, st.wSecond);
 }
 
+/* ── Vergelijk op display-naam (db-naam heeft voorrang) ────────────────── */
+static int cmp_display_name(const void *a, const void *b)
+{
+    const TitleEntry *ea = (const TitleEntry *)a;
+    const TitleEntry *eb = (const TitleEntry *)b;
+
+    uint32_t id_a = (uint32_t)strtoul(ea->title_id, NULL, 16);
+    uint32_t id_b = (uint32_t)strtoul(eb->title_id, NULL, 16);
+
+    const char *name_a = title_lookup(id_a);
+    if (!name_a) name_a = ea->title_name;
+
+    const char *name_b = title_lookup(id_b);
+    if (!name_b) name_b = eb->title_name;
+
+    return strcmp(name_a, name_b);
+}
+
 /* ── Verwijder een lokale map recursief ─────────────────────────── */
 static int delete_local_dir(const char *path)
 {
@@ -112,6 +130,7 @@ static void draw_list(const TitleEntry *titles, int n,
 void do_backup(TitleEntry *titles, int *n,
                const char *creds64, const AppConfig *cfg)
 {
+    qsort(titles, *n, sizeof(TitleEntry), cmp_display_name); 
     int selected = 0;
     char status_msg[80] = "";
     int redraw = 1;
