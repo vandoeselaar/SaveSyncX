@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define APP_VERSION  "v1.4"
+#define APP_VERSION  "v1.5.1"
 #define APP_TITLE    "SaveSyncX  " APP_VERSION
 
 /* ── WebDAV Server Settings ─────────────────────────────────────────────── */

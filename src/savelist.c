@@ -1,32 +1,10 @@
 /*
  * savelist.c  –  Simpele hand-parser voor savegames/list.json
  *
- * Strategie: we zoeken sleutelwoorden met strstr en lezen de waarden
- * die er direct achter staan. Geen recursieve parser, geen heap-allocatie.
- * Werkt zolang het JSON-formaat stabiel is (en dat is het, want wij
- * schrijven het zelf).
- *
- * Verwacht formaat (zie eerder in gesprek):
- * {
- *   "version": 1,
- *   "updated": "2025-01-15",
- *   "saves": [
- *     {
- *       "title_id": "4d530004",
- *       "game_name": "Halo: Combat Evolved",
- *       "saves": [
- *         {
- *           "id": "default",
- *           "label": "Campaign - All missions unlocked",
- *           "file": "savegames/4d530004/default.zip",
- *           "size_bytes": 24576,
- *           "author": "vandoeselaar",
- *           "notes": "100% complete"
- *         }
- *       ]
- *     }
- *   ]
- * }
+ * Geheugen wordt dynamisch gealloceerd per game en per save, zodat de
+ * geheugenvoetafdruk overeenkomt met de werkelijke inhoud van list.json.
+ * GTA San Andreas met 104 saves kost dan hetzelfde als een game met 2 saves
+ * maal 52 — in plaats van dat de MAX_SAVES limiet voor alle games geldt.
  */
 
 #include "savelist.h"
@@ -38,53 +16,33 @@
 
 /* ── Hulpfuncties ────────────────────────────────────────────────────────── */
 
-/*
- * Lees de string-waarde na `"key":` in src (inclusief aanhalingstekens).
- * Schrijft naar dst (max dst_size bytes, null-terminated).
- * Retourneert een pointer naar het teken NA de sluitende quote, of NULL.
- */
-static const char *read_str_field(const char *src,
-                                   const char *key,
+static const char *read_str_field(const char *src, const char *key,
                                    char *dst, int dst_size)
 {
-    /* Zoek "key": */
     const char *p = strstr(src, key);
     if (!p) return NULL;
     p += strlen(key);
-
-    /* Sla whitespace en ':' over */
     while (*p == ':' || *p == ' ' || *p == '\t') p++;
 
     if (*p == 'n') {
-        /* null waarde */
         dst[0] = '\0';
-        /* sla "null" over */
         while (*p && *p != ',' && *p != '\n' && *p != '}') p++;
         return p;
     }
-
     if (*p != '"') return NULL;
-    p++;    /* sla openingsquote over */
+    p++;
 
     int i = 0;
     while (*p && *p != '"' && i < dst_size - 1) {
-        /* Eenvoudige escape handling */
-        if (*p == '\\' && *(p+1)) { p++; }
+        if (*p == '\\' && *(p+1)) p++;
         dst[i++] = *p++;
     }
     dst[i] = '\0';
-
-    if (*p == '"') p++;  /* sla sluitingsquote over */
+    if (*p == '"') p++;
     return p;
 }
 
-/*
- * Lees een integer-waarde na `"key":`.
- * Retourneert een pointer voorbij de waarde, of NULL.
- */
-static const char *read_int_field(const char *src,
-                                   const char *key,
-                                   int *out)
+static const char *read_int_field(const char *src, const char *key, int *out)
 {
     const char *p = strstr(src, key);
     if (!p) return NULL;
@@ -95,99 +53,94 @@ static const char *read_int_field(const char *src,
     return p;
 }
 
-/*
- * Zoek het n-de voorkomen van `needle` in `haystack`.
- * (0-gebaseerd: n=0 is het eerste voorkomen)
- */
-static const char *find_nth(const char *haystack, const char *needle, int n)
+/* ── Geheugenhelpers ─────────────────────────────────────────────────────── */
+
+/* Voeg een lege SaveEntry toe aan een GameSaveList, groeit de array indien nodig.
+   Retourneert pointer naar de nieuwe entry, of NULL bij malloc-fout. */
+static SaveEntry *game_add_save(GameSaveList *g)
 {
-    const char *p = haystack;
-    for (int i = 0; i <= n; i++) {
-        p = strstr(p, needle);
-        if (!p) return NULL;
-        if (i < n) p++;
+    if (g->save_count >= g->save_cap) {
+        int new_cap = g->save_cap == 0 ? 8 : g->save_cap * 2;
+        SaveEntry *tmp = (SaveEntry *)realloc(g->saves,
+                                              new_cap * sizeof(SaveEntry));
+        if (!tmp) return NULL;
+        g->saves    = tmp;
+        g->save_cap = new_cap;
     }
-    return p;
+    SaveEntry *se = &g->saves[g->save_count++];
+    memset(se, 0, sizeof(*se));
+    return se;
 }
 
 /* ── Hoofd-parser ────────────────────────────────────────────────────────── */
+
 int savelist_parse(const char *json, SaveList *out)
 {
     if (!json || !out) return -1;
     memset(out, 0, sizeof(*out));
 
-    /* version */
-    read_int_field(json, "\"version\"", &out->version);
+    /* Alloceer games pointer-array */
+    out->games = (GameSaveList **)calloc(SAVELIST_MAX_GAMES,
+                                          sizeof(GameSaveList *));
+    if (!out->games) return -1;
 
-    /* updated */
+    read_int_field(json, "\"version\"", &out->version);
     read_str_field(json, "\"updated\"", out->updated, sizeof(out->updated));
 
-    /*
-     * Loop door game-objecten in de buitenste "saves": [...] array.
-     * We herkennen elk game-object aan het voorkomen van "title_id".
-     */
-    const char *p = json;
-
-    /* Sla de buitenste array header over */
-    const char *saves_start = strstr(p, "\"saves\"");
+    /* Sla buitenste "saves": [ over */
+    const char *saves_start = strstr(json, "\"saves\"");
     if (!saves_start) {
         log_print("[SL] 'saves' array niet gevonden\n");
+        free(out->games);
+        out->games = NULL;
         return -1;
     }
-    /* Sla "saves": [ over */
-    p = strchr(saves_start, '[');
-    if (!p) return -1;
+    const char *p = strchr(saves_start, '[');
+    if (!p) { free(out->games); out->games = NULL; return -1; }
     p++;
 
-    out->game_count = 0;
-
     while (out->game_count < SAVELIST_MAX_GAMES) {
+
         /* Zoek volgende title_id */
         const char *tid_pos = strstr(p, "\"title_id\"");
         if (!tid_pos) break;
 
-        GameSaveList *g = &out->games[out->game_count];
+        /* Alloceer GameSaveList op de heap */
+        GameSaveList *g = (GameSaveList *)calloc(1, sizeof(GameSaveList));
+        if (!g) break;
 
         /* title_id */
         const char *after = read_str_field(tid_pos, "\"title_id\"",
                                             g->title_id, sizeof(g->title_id));
-        if (!after) { p = tid_pos + 1; continue; }
+        if (!after) { free(g); p = tid_pos + 1; continue; }
 
-        /* game_name — zoek in dezelfde buurt (tot de volgende title_id) */
+        /* Bepaal het einde van dit game-object (volgende title_id of einde) */
         const char *next_tid = strstr(after, "\"title_id\"");
-        int  search_len = next_tid
-                          ? (int)(next_tid - tid_pos)
-                          : (int)strlen(tid_pos);
+        int search_len = next_tid ? (int)(next_tid - tid_pos)
+                                  : (int)strlen(tid_pos);
 
-        /* Tijdelijke kopie voor field-zoekopdrachten binnen dit object */
         char *obj = (char *)malloc(search_len + 1);
-        if (!obj) break;
+        if (!obj) { free(g); break; }
         memcpy(obj, tid_pos, search_len);
         obj[search_len] = '\0';
 
         read_str_field(obj, "\"game_name\"",
                        g->game_name, sizeof(g->game_name));
 
-        /* Interne "saves": [ array voor dit game-object.
-         * We zoeken de binnenste array op en gebruiken bracket-telling
-         * om het correcte sluit-haakje te vinden (niet de eerste ']'). */
+        /* Interne saves array — bracket-teller voor correcte afbakening */
         const char *inner_saves = strstr(obj, "\"saves\"");
-        g->save_count = 0;
-
         if (inner_saves) {
             const char *arr = strchr(inner_saves, '[');
             if (arr) {
-                arr++;  /* voorbij '[' */
-
-                /* Zoek sluit-haakje met bracket-teller */
+                arr++;
                 int depth = 1;
                 const char *q = arr;
                 while (*q && depth > 0) {
-                    if (*q == '[') depth++;
+                    if      (*q == '[') depth++;
                     else if (*q == ']') depth--;
                     q++;
                 }
-                int arr_len = (int)((q - 1) - arr);  /* exclusief sluit ']' */
+                int arr_len = (int)((q - 1) - arr);
 
                 char *save_block = (char *)malloc(arr_len + 1);
                 if (save_block) {
@@ -195,45 +148,36 @@ int savelist_parse(const char *json, SaveList *out)
                     save_block[arr_len] = '\0';
 
                     const char *sp = save_block;
-                    while (g->save_count < SAVELIST_MAX_SAVES) {
-                        /* Zoek volgende save-object aan de hand van "id": */
+                    while (1) {
                         const char *id_pos = strstr(sp, "\"id\"");
                         if (!id_pos) break;
 
-                        SaveEntry *se = &g->saves[g->save_count];
-
-                        /* Bepaal einde van dit save-object (volgende "id" of einde) */
                         const char *next_id = strstr(id_pos + 4, "\"id\"");
-                        int slen = next_id
-                                   ? (int)(next_id - id_pos)
-                                   : (int)strlen(id_pos);
+                        int slen = next_id ? (int)(next_id - id_pos)
+                                           : (int)strlen(id_pos);
 
                         char *sobj = (char *)malloc(slen + 1);
                         if (!sobj) break;
                         memcpy(sobj, id_pos, slen);
                         sobj[slen] = '\0';
 
+                        SaveEntry *se = game_add_save(g);
+                        if (!se) { free(sobj); break; }
+
                         read_str_field(sobj, "\"id\"",
-                                       se->id, sizeof(se->id));
+                                       se->id,     sizeof(se->id));
                         read_str_field(sobj, "\"label\"",
-                                       se->label, sizeof(se->label));
+                                       se->label,  sizeof(se->label));
                         read_str_field(sobj, "\"file\"",
-                                       se->file, sizeof(se->file));
+                                       se->file,   sizeof(se->file));
                         read_str_field(sobj, "\"author\"",
                                        se->author, sizeof(se->author));
                         read_str_field(sobj, "\"notes\"",
-                                       se->notes, sizeof(se->notes));
+                                       se->notes,  sizeof(se->notes));
                         read_int_field(sobj, "\"size_bytes\"",
                                        &se->size_bytes);
 
                         free(sobj);
-                        g->save_count++;
-                        if (g->save_count >= SAVELIST_MAX_SAVES) {
-                            log_print("[SL] waarschuwing: save limiet (%d) bereikt voor '%s'\n",
-                                      SAVELIST_MAX_SAVES, g->game_name);
-                            break;
-                        }
-
                         if (next_id) sp = next_id;
                         else break;
                     }
@@ -243,17 +187,28 @@ int savelist_parse(const char *json, SaveList *out)
         }
 
         free(obj);
-        out->game_count++;
-        if (out->game_count >= SAVELIST_MAX_GAMES) {
-            log_print("[SL] waarschuwing: game limiet (%d) bereikt\n",
-                      SAVELIST_MAX_GAMES);
-            break;
-        }
-
-        /* Ga verder voorbij dit game-object */
+        out->games[out->game_count++] = g;
         p = next_tid ? next_tid : (tid_pos + 1);
     }
 
     log_print("[SL] parsed: %d games\n", out->game_count);
     return out->game_count;
+}
+
+/* ── Opruimen ────────────────────────────────────────────────────────────── */
+
+void savelist_free(SaveList *list)
+{
+    if (!list) return;
+    if (list->games) {
+        for (int i = 0; i < list->game_count; i++) {
+            if (list->games[i]) {
+                free(list->games[i]->saves);
+                free(list->games[i]);
+            }
+        }
+        free(list->games);
+        list->games = NULL;
+    }
+    list->game_count = 0;
 }

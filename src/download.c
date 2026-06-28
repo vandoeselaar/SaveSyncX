@@ -161,6 +161,14 @@ static int download_save(const SaveEntry *se)
 }
 
 /* ── Save-selectiescherm (tweede niveau) ─────────────────────────────────── */
+
+/* Onderkant van het lijstgebied: laat ruimte voor de helpbalk */
+#define SAVE_LIST_BOTTOM  (SCREEN_H - MARGIN_Y - CHAR_H * 2)
+/* Hoogte per entry (label + kleine padding) */
+#define SAVE_ROW_H        (CHAR_H + 4)
+/* Hoogte van de notes-regel onder de geselecteerde entry */
+#define SAVE_NOTES_H      (CHAR_H + 2)
+
 static void show_save_menu(const GameSaveList *game)
 {
     if (game->save_count == 0) {
@@ -168,42 +176,87 @@ static void show_save_menu(const GameSaveList *game)
         return;
     }
 
-    int sel = 0;
+    int sel    = 0;
+    int offset = 0;
     ScrollState ss = {0};
 
     while (1) {
         ui_pump_events();
 
-        /* Render */
+        /* ── Offset bijstellen zodat sel altijd zichtbaar is ── */
+        if (sel < offset)
+            offset = sel;
+
+        /*
+         * Bereken hoeveel entries er vanaf `offset` op het scherm passen,
+         * rekening houdend met de extra notes-regel van de geselecteerde entry.
+         * We lopen de entries door totdat de beschikbare pixels op zijn.
+         */
+        {
+            int y_sim  = MARGIN_Y + CHAR_H * 2;   /* zelfde startpunt als render */
+            int last_visible = offset;
+            for (int i = offset; i < game->save_count; i++) {
+                int row_h = SAVE_ROW_H;
+                if (i == sel && game->saves[i].notes[0])
+                    row_h += SAVE_NOTES_H;
+                if (y_sim + row_h > SAVE_LIST_BOTTOM)
+                    break;
+                y_sim += row_h;
+                last_visible = i;
+            }
+            /* Als sel voorbij de laatste zichtbare entry valt, schuif offset op */
+            if (sel > last_visible)
+                offset = sel;   /* volgende frame herberekenen */
+        }
+
+        /* ── Render ── */
         ui_clear();
-        ui_draw_text(MARGIN_X, MARGIN_Y,
-                     game->game_name, UI_COL_TITLE);
+        ui_draw_text(MARGIN_X, MARGIN_Y, game->game_name, UI_COL_TITLE);
+
+        /* Scroll-indicator rechtsboven als er meer entries zijn dan op één pagina past */
+        {
+            char sc[16];
+            snprintf(sc, sizeof(sc), "%d/%d", sel + 1, game->save_count);
+            ui_draw_text(SCREEN_W - MARGIN_X - (int)strlen(sc) * 8,
+                         MARGIN_Y, sc, UI_COL_DIM);
+        }
 
         int y = MARGIN_Y + CHAR_H * 2;
-        for (int i = 0; i < game->save_count; i++) {
+
+        for (int i = offset; i < game->save_count; i++) {
             const SaveEntry *se = &game->saves[i];
+
+            /* Bereken hoe hoog deze entry wordt */
+            int row_h = SAVE_ROW_H;
+            if (i == sel && se->notes[0])
+                row_h += SAVE_NOTES_H;
+
+            /* Stop als de entry niet meer past */
+            if (y + row_h > SAVE_LIST_BOTTOM)
+                break;
+
             Uint32 col = (i == sel) ? UI_COL_SELECT : UI_COL_ITEM;
 
             if (i == sel) {
                 ui_fill_rect(MARGIN_X - 4, y - 2,
-                             SCREEN_W - MARGIN_X * 2 + 8, CHAR_H + 4,
+                             SCREEN_W - MARGIN_X * 2 + 8, row_h + 2,
                              UI_COL_SELBG);
             }
 
             char size_str[16];
             fmt_size(se->size_bytes, size_str, sizeof(size_str));
 
-            char line[128];
+            char line[SAVELIST_MAX_STR + 24];
             snprintf(line, sizeof(line), "%s  [%s]", se->label, size_str);
             ui_draw_text(MARGIN_X, y, line, col);
-            y += CHAR_H + 4;
+            y += SAVE_ROW_H;
 
             /* Notes onder de geselecteerde entry */
             if (i == sel && se->notes[0]) {
-                char notes[64];
+                char notes[SAVELIST_MAX_STR];
                 snprintf(notes, sizeof(notes), "  %s", se->notes);
                 ui_draw_text(MARGIN_X, y, notes, UI_COL_DIM);
-                y += CHAR_H;
+                y += SAVE_NOTES_H;
             }
         }
 
@@ -211,15 +264,14 @@ static void show_save_menu(const GameSaveList *game)
                      "A=Download  B=Back", UI_COL_DIM);
         ui_flip();
 
-        /* Input */
+        /* ── Input ── */
         int delta = scroll_update(&ss, game->save_count);
         scroll_apply(&sel, delta, game->save_count);
 
         if (btn_pressed(BTN_A)) {
             const SaveEntry *se = &game->saves[sel];
-            char confirm[128];
-            snprintf(confirm, sizeof(confirm),
-                     "Download '%s'?", se->label);
+            char confirm[SAVELIST_MAX_STR + 16];
+            snprintf(confirm, sizeof(confirm), "Download '%s'?", se->label);
             if (ui_confirm(confirm)) {
                 download_save(se);
             }
@@ -261,7 +313,7 @@ static void show_game_menu(const SaveList *list)
         for (int i = offset;
              i < list->game_count && i < offset + LIST_PAGE_SIZE;
              i++) {
-            const GameSaveList *g = &list->games[i];
+            const GameSaveList *g = list->games[i];
             Uint32 col = (i == sel) ? UI_COL_SELECT : UI_COL_ITEM;
 
             if (i == sel) {
@@ -303,7 +355,11 @@ static void show_game_menu(const SaveList *list)
         scroll_apply(&sel, delta, list->game_count);
 
         if (btn_pressed(BTN_A)) {
-            show_save_menu(&list->games[sel]);
+            show_save_menu(list->games[sel]);
+            /* Consumeer de button-state na terugkeer uit show_save_menu,
+             * zodat de B-druk waarmee de gebruiker terugging niet doorlekt
+             * naar show_game_menu en die ook meteen sluit. */
+            ui_pump_events();
         }
 
         if (btn_pressed(BTN_B)) return;
@@ -350,13 +406,15 @@ int do_download(const AppConfig *cfg)
     free(json_buf);
 
     if (game_count < 0) {
-        free(list);
+        savelist_free(list);
+    free(list);
         ui_message("Error", "Failed to parse list.json");
         return -1;
     }
 
     if (game_count == 0) {
-        free(list);
+        savelist_free(list);
+    free(list);
         ui_message("Download Saves", "No saves available yet.");
         return 0;
     }
@@ -364,6 +422,7 @@ int do_download(const AppConfig *cfg)
     /* Stap 4: toon menu */
     show_game_menu(list);
 
+    savelist_free(list);
     free(list);
     return 0;
 }
