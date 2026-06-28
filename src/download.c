@@ -28,7 +28,7 @@
 #define GITHUB_RAW_PATH_PREFIX  "/vandoeselaar/SaveSyncX-Saves/main/"
 
 /* Maximale grootte van de list.json response */
-#define LIST_JSON_MAX   16384
+#define LIST_JSON_MAX   (640 * 1024)
 
 /* Maximale grootte van een gedownloade save zip */
 #define SAVE_ZIP_MAX    (4 * 1024 * 1024)   /* 4 MB, ruim voor save-zips */

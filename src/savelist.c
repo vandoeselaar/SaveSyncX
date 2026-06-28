@@ -168,7 +168,9 @@ int savelist_parse(const char *json, SaveList *out)
         read_str_field(obj, "\"game_name\"",
                        g->game_name, sizeof(g->game_name));
 
-        /* Interne "saves": [ array voor dit game-object */
+        /* Interne "saves": [ array voor dit game-object.
+         * We zoeken de binnenste array op en gebruiken bracket-telling
+         * om het correcte sluit-haakje te vinden (niet de eerste ']'). */
         const char *inner_saves = strstr(obj, "\"saves\"");
         g->save_count = 0;
 
@@ -176,8 +178,16 @@ int savelist_parse(const char *json, SaveList *out)
             const char *arr = strchr(inner_saves, '[');
             if (arr) {
                 arr++;  /* voorbij '[' */
-                const char *arr_end = strchr(arr, ']');
-                int arr_len = arr_end ? (int)(arr_end - arr) : (int)strlen(arr);
+
+                /* Zoek sluit-haakje met bracket-teller */
+                int depth = 1;
+                const char *q = arr;
+                while (*q && depth > 0) {
+                    if (*q == '[') depth++;
+                    else if (*q == ']') depth--;
+                    q++;
+                }
+                int arr_len = (int)((q - 1) - arr);  /* exclusief sluit ']' */
 
                 char *save_block = (char *)malloc(arr_len + 1);
                 if (save_block) {
@@ -218,6 +228,11 @@ int savelist_parse(const char *json, SaveList *out)
 
                         free(sobj);
                         g->save_count++;
+                        if (g->save_count >= SAVELIST_MAX_SAVES) {
+                            log_print("[SL] waarschuwing: save limiet (%d) bereikt voor '%s'\n",
+                                      SAVELIST_MAX_SAVES, g->game_name);
+                            break;
+                        }
 
                         if (next_id) sp = next_id;
                         else break;
@@ -229,6 +244,11 @@ int savelist_parse(const char *json, SaveList *out)
 
         free(obj);
         out->game_count++;
+        if (out->game_count >= SAVELIST_MAX_GAMES) {
+            log_print("[SL] waarschuwing: game limiet (%d) bereikt\n",
+                      SAVELIST_MAX_GAMES);
+            break;
+        }
 
         /* Ga verder voorbij dit game-object */
         p = next_tid ? next_tid : (tid_pos + 1);

@@ -230,8 +230,19 @@ int github_fetch_raw(const char *path, char *out_buf, int out_size)
         return -1;
     }
 
-    /* Lees volledige response in tijdelijke buffer */
-    int   raw_size = out_size * 2 + 4096;   /* ruim genoeg voor headers */
+    /*
+     * Lees volledige response in tijdelijke buffer.
+     *
+     * raw_size moet groot genoeg zijn voor:
+     *   - HTTP headers (~1–2 KB)
+     *   - chunk-size regels als GitHub chunked transfer gebruikt
+     *     (elke chunk heeft een hex-getal + \r\n overhead, typisch
+     *      1–8 bytes per chunk van ~16 KB; worst-case ±5% overhead)
+     *   - de eigenlijke body (out_size bytes)
+     *
+     * We reserveren headers + 10% overhead boven out_size.
+     */
+    int   raw_size = out_size + out_size / 10 + 8192;
     char *raw_buf  = (char *)malloc(raw_size);
     if (!raw_buf) {
         log_print("[GH] malloc raw_buf failed\n");
@@ -271,8 +282,7 @@ int github_fetch_raw(const char *path, char *out_buf, int out_size)
 
     /*
      * Zoek header/body scheiding binary-safe: zoek \r\n\r\n als
-     * byte-reeks via memchr/memmem. strstr stopt bij nul-bytes in
-     * binary responses en is daarvoor ongeschikt.
+     * byte-reeks. strstr stopt bij nul-bytes in binary responses.
      */
     int header_end = -1;
     for (int i = 0; i <= total - 4; i++) {
@@ -291,20 +301,90 @@ int github_fetch_raw(const char *path, char *out_buf, int out_size)
     /* Controleer HTTP status */
     if (strncmp(raw_buf, "HTTP/1.1 200", 12) != 0 &&
         strncmp(raw_buf, "HTTP/1.0 200", 12) != 0) {
+        log_print("[GH] niet-200 response, afgebroken\n");
         free(raw_buf);
         return -1;
     }
 
-    /* Binary-safe body kopiëren op basis van byte-offset, niet string */
-    int body_len = total - header_end;
-    if (body_len < 0) body_len = 0;
-    if (body_len >= out_size) body_len = out_size - 1;
+    /*
+     * Detecteer chunked transfer encoding door de headers te scannen.
+     * We zoeken naar "Transfer-Encoding: chunked" (case-insensitief
+     * is niet nodig — GitHub stuurt het altijd lowercase).
+     */
+    int chunked = 0;
+    {
+        /* Tijdelijk nul-terminate na de headers voor strstr */
+        char saved = raw_buf[header_end];
+        raw_buf[header_end] = '\0';
+        if (strstr(raw_buf, "Transfer-Encoding: chunked") != NULL)
+            chunked = 1;
+        raw_buf[header_end] = saved;
+    }
+    log_print("[GH] chunked=%d\n", chunked);
 
-    memcpy(out_buf, raw_buf + header_end, body_len);
-    /* Nul-terminate alleen voor tekst-responses (schaadt binary niet) */
+    const char *body_src = raw_buf + header_end;
+    int         body_raw = total - header_end;
+    int         body_len = 0;
+
+    if (chunked) {
+        /*
+         * Chunked decoder: elk chunk heeft de vorm
+         *   <hex-getal>\r\n
+         *   <data van dat aantal bytes>\r\n
+         * Afgesloten met:
+         *   0\r\n
+         *   \r\n
+         *
+         * We schrijven gedecodeerde bytes direct naar out_buf.
+         */
+        const char *p   = body_src;
+        const char *end = body_src + body_raw;
+
+        while (p < end) {
+            /* Lees chunk-grootte als hex */
+            char *crlf = NULL;
+            /* Zoek \r\n na de hex-waarde */
+            for (const char *q = p; q < end - 1; q++) {
+                if (q[0] == '\r' && q[1] == '\n') {
+                    crlf = (char *)q;
+                    break;
+                }
+            }
+            if (!crlf) break;   /* afgekapt — stop */
+
+            int chunk_size = 0;
+            for (const char *h = p; h < crlf; h++) {
+                char c = *h;
+                if      (c >= '0' && c <= '9') chunk_size = chunk_size * 16 + (c - '0');
+                else if (c >= 'a' && c <= 'f') chunk_size = chunk_size * 16 + (c - 'a' + 10);
+                else if (c >= 'A' && c <= 'F') chunk_size = chunk_size * 16 + (c - 'A' + 10);
+                else break;   /* extensies na ';' negeren */
+            }
+
+            if (chunk_size == 0) break;   /* laatste chunk */
+
+            p = crlf + 2;   /* sla \r\n over */
+
+            /* Kopieer chunk-data naar out_buf */
+            int copy = chunk_size;
+            if (body_len + copy >= out_size)
+                copy = out_size - 1 - body_len;
+            if (copy > 0) {
+                memcpy(out_buf + body_len, p, copy);
+                body_len += copy;
+            }
+            p += chunk_size + 2;   /* sla data + afsluitende \r\n over */
+        }
+    } else {
+        /* Geen chunked: gewone body, direct kopiëren */
+        body_len = body_raw;
+        if (body_len >= out_size) body_len = out_size - 1;
+        memcpy(out_buf, body_src, body_len);
+    }
+
     out_buf[body_len] = '\0';
 
     free(raw_buf);
-    log_print("[GH] body: %d bytes\n", body_len);
+    log_print("[GH] body: %d bytes (chunked=%d)\n", body_len, chunked);
     return body_len;
 }

@@ -8,9 +8,9 @@
  * Het formaat is stabiel en voorspelbaar, dus dat is prima.
  */
 
-#define SAVELIST_MAX_GAMES    64
-#define SAVELIST_MAX_SAVES    4     /* saves per game */
-#define SAVELIST_MAX_STR      128
+#define SAVELIST_MAX_GAMES    256    /* ruim voor huidige ~230 games */
+#define SAVELIST_MAX_SAVES    32     /* saves per game; Baldur's Gate heeft 10 */
+#define SAVELIST_MAX_STR      192    /* labels kunnen lang zijn */
 
 /* Één downloadbare save */
 typedef struct {
