@@ -22,7 +22,7 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ### v1.4.1 
 
-* **Bug fix Added alphabetical sorting for save games listing in backup and restore menu
+* **Bug fix** Added alphabetical sorting for save games listing in backup and restore menu
 
 ### v1.4 – Non-Roamable Save Support & Community Saves
 
