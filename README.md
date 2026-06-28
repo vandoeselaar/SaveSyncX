@@ -20,6 +20,20 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.5 — Download fixes & community save archive support
+
+**Download — fetching list.json**
+- Fix: GitHub serves HTTP/1.1 responses with `Transfer-Encoding: chunked`. The response was not decoded correctly, causing the body to contain raw chunk-size lines instead of JSON. Added a chunked transfer decoder in `github_fetch.c`.
+- Fix: `raw_buf` in `github_fetch_raw` was sized too small (`out_size * 2 + 4096`), causing the response to be truncated. Buffer is now calculated as `out_size + 10% + 8192`, matching the actual overhead of HTTP headers and chunk metadata.
+- Fix: `LIST_JSON_MAX` in `download.c` was 16 KB. The actual list.json is ~600 KB and growing. Buffer increased to 640 KB.
+
+**Download — save list display**
+- Fix: `SAVELIST_MAX_GAMES` was set to 64, causing the list to be cut off after 64 games. Increased to 256.
+- Fix: `SAVELIST_MAX_SAVES` was set to 4 saves per game. Some games (e.g. Baldur's Gate: Dark Alliance 2) have dozens of saves. Increased to 32.
+- Fix: `SAVELIST_MAX_STR` was set to 128 characters. Long save labels were being truncated. Increased to 192.
+- Fix: the inner saves array parser used `strchr(arr, ']')` to find the end of the saves array, which matched the first `]` inside a nested object rather than the correct closing bracket. Replaced with a bracket counter that correctly handles nested structures.
+- Added: warning in the log when the game or save limit is reached, making this immediately visible if the list grows further.
+
 ### v1.4.1 
 
 * **Bug fix** Added alphabetical sorting for save games listing in backup and restore menu
