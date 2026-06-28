@@ -20,6 +20,18 @@ Xbox homebrew application that backs up and restores game saves via WebDAV, and 
 
 ## Changelog
 
+### v1.5.1 — Download list fixes
+
+**Download — fetching list.json**
+- Fix: `LIST_JSON_MAX` was 640 KB. The actual list.json is ~722 KB and growing. Buffer increased to 1 MB.
+
+**Download — save list display**
+- Fix: `SaveList` used fixed-size arrays for games and saves, causing `sizeof(SaveList)` to exceed 30 MB with `SAVELIST_MAX_GAMES=512` and `SAVELIST_MAX_SAVES=64`. The Xbox heap could not sustain this alongside the JSON and TLS buffers, resulting in the list being silently truncated at ~400 games. Switched to dynamic allocation: saves are heap-allocated per game using a growing array (`realloc`), and games are stored as a pointer array. Memory usage is now ~2.5 MB for the current list of 448 games and 2568 saves total.
+- Fix: games with many saves (e.g. GTA San Andreas: 104, DOOM 3: 94) were capped at `SAVELIST_MAX_SAVES`. This limit no longer exists.
+- Fix: save list had no pagination. Titles with many saves ran off the bottom of the screen. The save menu now scrolls correctly, tracks the selected entry across page boundaries, and accounts for the variable height of the notes line shown under the selected entry.
+- Added: `savelist_free()` to release all heap memory allocated by `savelist_parse()`. Called on all exit paths in `do_download`.
+
+- 
 ### v1.5 — Download fixes & community save archive support
 
 **Download — fetching list.json**
